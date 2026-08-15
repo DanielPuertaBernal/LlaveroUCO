@@ -1,0 +1,31 @@
+# Herramientas de sesión/agente locales — no forman parte del proyecto
+.claude/
+.engram/
+.atl/
+
+# Dependencias
+**/node_modules/
+
+# Env / secretos
+.env
+.env.*
+!.env.example
+
+# Build output
+**/dist/
+**/build/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+
+# Editor/OS
+.DS_Store
+*.swp
+
+# Coverage / cache
+**/coverage/
+**/.eslintcache
+*.xls
+*.xlsx

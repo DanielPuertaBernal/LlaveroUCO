@@ -1,0 +1,78 @@
+'use strict';
+const configuracionRepository = require('./configuracion.repository');
+const bloqueRepository = require('../bloques/bloque.repository');
+const ApiError = require('../../shared/errors/api.error');
+
+const DEFAULTS_FALLBACK = {
+  tiempo_maximo_prestamo_minutos: 120,
+  intervalo_recordatorio_minutos: 30,
+  max_recordatorios: 5,
+  notificaciones_activas: true,
+};
+
+const DEFAULTS_SIN_BLOQUE = {
+  tiempo_maximo_prestamo_minutos: 60,
+  intervalo_recordatorio_minutos: 15,
+  max_recordatorios: 2,
+  notificaciones_activas: true,
+};
+
+class ConfiguracionService {
+  async listar() {
+    return configuracionRepository.findAll();
+  }
+
+  async obtenerDefaults() {
+    const stored = await configuracionRepository.findByBloque('__defaults__');
+    return stored || { nombre_bloque: '__defaults__', ...DEFAULTS_FALLBACK };
+  }
+
+  async obtenerPorBloque(nombreBloque) {
+    if (!nombreBloque) {
+      return { nombre_bloque: '', ...DEFAULTS_SIN_BLOQUE };
+    }
+    const config = await configuracionRepository.findByBloque(nombreBloque);
+    if (config) return config;
+    return this.obtenerDefaults();
+  }
+
+  async guardarDefaults(data) {
+    return configuracionRepository.upsert('__defaults__', { nombre_bloque: '__defaults__', ...data });
+  }
+
+  async guardar(nombreBloque, data) {
+    const bloque = await bloqueRepository.findByNombre(nombreBloque);
+    if (!bloque) {
+      throw ApiError.notFound(`Bloque '${nombreBloque}' no encontrado`);
+    }
+
+    const campos = {};
+    if (data.tiempo_maximo_prestamo_minutos !== undefined) {
+      campos.tiempo_maximo_prestamo_minutos = data.tiempo_maximo_prestamo_minutos;
+    }
+    if (data.intervalo_recordatorio_minutos !== undefined) {
+      campos.intervalo_recordatorio_minutos = data.intervalo_recordatorio_minutos;
+    }
+    if (data.max_recordatorios !== undefined) {
+      campos.max_recordatorios = data.max_recordatorios;
+    }
+    if (data.notificaciones_activas !== undefined) {
+      campos.notificaciones_activas = data.notificaciones_activas;
+    }
+
+    return configuracionRepository.upsert(nombreBloque, {
+      nombre_bloque: nombreBloque,
+      ...campos,
+    });
+  }
+
+  async eliminar(nombreBloque) {
+    const deleted = await configuracionRepository.remove(nombreBloque);
+    if (!deleted) {
+      throw ApiError.notFound(`Configuración para bloque '${nombreBloque}' no encontrada`);
+    }
+    return deleted;
+  }
+}
+
+module.exports = new ConfiguracionService();
