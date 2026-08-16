@@ -78,6 +78,45 @@ class ComunidadService {
     return { sincronizados: validados.length, ...resultado };
   }
 
+  /**
+   * Sync desde el sistema fuente de estudiantes (ETL institucional). Sin
+   * `tipo` en el payload (no aplica: ya se sabe que viene de la fuente
+   * estudiantes). Usa el merge compartido con precedencia de empleado sobre
+   * estudiante, ver `comunidadRepository._upsertPorFuente`.
+   * @param {object} payload
+   */
+  async syncEstudiantes(payload) {
+    return this._syncPorFuente(payload, 'estudiante');
+  }
+
+  /**
+   * Sync desde el sistema fuente de empleados/RRHH (ETL institucional). Sin
+   * `tipo` en el payload. Los datos de empleado son autoritativos y siempre
+   * sobrescriben facultad/correo/id_carnet/numero_contacto.
+   * @param {object} payload
+   */
+  async syncEmpleados(payload) {
+    return this._syncPorFuente(payload, 'empleado');
+  }
+
+  async _syncPorFuente(payload, fuente) {
+    const registros = Array.isArray(payload.registros)
+      ? payload.registros
+      : payload.registro
+        ? [payload.registro]
+        : [];
+
+    if (!registros.length) {
+      throw ApiError.badRequest('Debe enviar al menos un registro (campo "registro" o "registros")');
+    }
+
+    const validados = registros.map((r, i) => this._validarRegistroSinTipo(r, i));
+    const metodo = fuente === 'empleado' ? 'upsertEmpleados' : 'upsertEstudiantes';
+    const resultado = await comunidadRepository[metodo](validados);
+    logger.info(`Sync de ${fuente}s completado`, { total: validados.length, fuente });
+    return { sincronizados: validados.length, ...resultado };
+  }
+
   async actualizar(id, data) {
     const persona = await comunidadRepository.findById(id);
     if (!persona) throw ApiError.notFound('Persona no encontrada');
@@ -122,6 +161,30 @@ class ComunidadService {
       facultad: String(r.facultad || '').trim(),
       correo: String(r.correo || '').trim().toLowerCase(),
       id_carnet: String(r.id_carnet || '').trim(),
+    };
+  }
+
+  /**
+   * Valida un registro de los sync `/sync/estudiantes` y `/sync/empleados`:
+   * mismos campos que `_validarRegistro`, sin `tipo` (la fuente ya lo
+   * determina) y con `numero_contacto` incluido (sí participa en el merge).
+   * @param {object} r @param {number} idx
+   */
+  _validarRegistroSinTipo(r, idx) {
+    if (!r.numero_documento?.trim()) {
+      throw ApiError.badRequest(`Registro ${idx}: numero_documento es requerido`);
+    }
+    if (!r.nombre?.trim()) {
+      throw ApiError.badRequest(`Registro ${idx}: nombre es requerido`);
+    }
+
+    return {
+      numero_documento: String(r.numero_documento).trim(),
+      nombre: String(r.nombre).trim(),
+      facultad: String(r.facultad || '').trim(),
+      correo: String(r.correo || '').trim().toLowerCase(),
+      id_carnet: String(r.id_carnet || '').trim(),
+      numero_contacto: String(r.numero_contacto || '').trim(),
     };
   }
 }

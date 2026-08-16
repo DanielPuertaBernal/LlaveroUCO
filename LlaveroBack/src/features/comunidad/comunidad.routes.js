@@ -161,6 +161,32 @@ router.post('/', ...requireAuth, (req, res) => comunidadController.crear(req, re
 // Endpoint de sincronización — sin autenticación (sistema externo)
 router.post('/sync', (req, res) => comunidadController.sync(req, res));
 
+/**
+ * @openapi
+ * /comunidad/sync/estudiantes:
+ *   post:
+ *     tags: [Comunidad]
+ *     summary: Sincronizar registros desde el sistema fuente de estudiantes (ETL institucional)
+ *     description: Acepta un registro individual o un arreglo de registros, sin campo `tipo`. No requiere autenticación.
+ *     responses:
+ *       200:
+ *         description: Registros sincronizados
+ */
+router.post('/sync/estudiantes', (req, res) => comunidadController.syncEstudiantes(req, res));
+
+/**
+ * @openapi
+ * /comunidad/sync/empleados:
+ *   post:
+ *     tags: [Comunidad]
+ *     summary: Sincronizar registros desde el sistema fuente de empleados/RRHH (ETL institucional)
+ *     description: Acepta un registro individual o un arreglo de registros, sin campo `tipo`. No requiere autenticación.
+ *     responses:
+ *       200:
+ *         description: Registros sincronizados
+ */
+router.post('/sync/empleados', (req, res) => comunidadController.syncEmpleados(req, res));
+
 router.patch('/:id', ...requireAdmin, (req, res) => comunidadController.actualizar(req, res));
 router.delete('/:id', ...requireAdmin, (req, res) => comunidadController.eliminar(req, res));
 

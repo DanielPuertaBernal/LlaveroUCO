@@ -50,6 +50,18 @@ class ComunidadController {
     const resultado = await comunidadService.sync(req.body);
     return res.json({ ok: true, message: 'Sincronización completada', data: resultado });
   }
+
+  /** POST /api/comunidad/sync/estudiantes - Sincroniza desde el sistema fuente de estudiantes */
+  async syncEstudiantes(req, res) {
+    const resultado = await comunidadService.syncEstudiantes(req.body);
+    return res.json({ ok: true, message: 'Sincronización de estudiantes completada', data: resultado });
+  }
+
+  /** POST /api/comunidad/sync/empleados - Sincroniza desde el sistema fuente de empleados/RRHH */
+  async syncEmpleados(req, res) {
+    const resultado = await comunidadService.syncEmpleados(req.body);
+    return res.json({ ok: true, message: 'Sincronización de empleados completada', data: resultado });
+  }
 }
 
 module.exports = new ComunidadController();

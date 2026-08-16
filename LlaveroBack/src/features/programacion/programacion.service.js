@@ -293,7 +293,30 @@ class ProgramacionService {
     // los catálogos; se deja el FK en NULL y se conserva el texto libre
     // (docente_nombre/aula) en vez de fallar la ingesta (Decision 8 del diseño).
     const documentosUnicos = [...new Set(consolidados.map((r) => r.numero_documento).filter((d) => d && d !== 'N/A'))];
-    const personas = await comunidadRepository.findManyByDocumentos(documentosUnicos);
+    let personas = await comunidadRepository.findManyByDocumentos(documentosUnicos);
+    const documentosExistentes = new Set(personas.map((p) => String(p.numero_documento).trim()));
+
+    // Autocompletar `comunidad` con los docentes que trae el Excel (columna
+    // `nroidenti`) pero que todavía no existen en el catálogo — el propio
+    // archivo de programación ya es la fuente de verdad del documento, no
+    // hace falta una sincronización manual aparte para vincular docente_id.
+    const nombreDocumentoNuevo = new Map();
+    for (const r of consolidados) {
+      if (r.numero_documento && r.numero_documento !== 'N/A' && !documentosExistentes.has(r.numero_documento) && r.docente && r.docente !== 'No asignado') {
+        if (!nombreDocumentoNuevo.has(r.numero_documento)) nombreDocumentoNuevo.set(r.numero_documento, r.docente);
+      }
+    }
+    if (nombreDocumentoNuevo.size) {
+      const nuevos = [...nombreDocumentoNuevo.entries()].map(([numero_documento, nombre]) => ({
+        numero_documento,
+        nombre,
+        tipo: 'docente',
+      }));
+      await comunidadRepository.upsertMany(nuevos);
+      logger.info('Docentes autocompletados en comunidad desde importación', { cantidad: nuevos.length });
+      personas = await comunidadRepository.findManyByDocumentos(documentosUnicos);
+    }
+
     const mapaDocenteId = Object.fromEntries(personas.map((p) => [String(p.numero_documento).trim(), p.id]));
 
     const aulasUnicas = [...new Set(consolidados.map((r) => r.aula).filter(Boolean))];
@@ -347,10 +370,12 @@ class ProgramacionService {
       'descripcion': 'facultad',
       'facultad': 'facultad',
       'Facultad': 'facultad',
+      'FACULTAD': 'facultad',
       'descripcion_1': 'materia',
       'descripcion2': 'materia',
       'materia': 'codigo_materia',
       'Materia de la Clase': 'materia',
+      'MATERIA': 'materia',
       'codigo_materia': 'codigo_materia',
       'Código de la Materia': 'codigo_materia',
       'grupo': 'grupo',
