@@ -207,10 +207,12 @@ class ReservaService {
         }
 
         // Compatibilidad hacia atrás para reservas históricas sin enlace directo.
+        // Rango del día en ZONA_HORARIA_APP (offset fijo -05:00, sin DST) —
+        // no depender de la hora local del servidor, igual que
+        // `sincronizarEstadosVencidos`/`findReservaPendienteNFCByDocumento`.
         if (!llave) {
-          const fechaObj = new Date(`${reserva.fecha}T00:00:00`);
-          const diaStart = new Date(fechaObj); diaStart.setHours(0, 0, 0, 0);
-          const diaEnd = new Date(fechaObj); diaEnd.setHours(23, 59, 59, 999);
+          const diaStart = new Date(`${reserva.fecha}T00:00:00-05:00`);
+          const diaEnd = new Date(`${reserva.fecha}T23:59:59.999-05:00`);
           llave = await llaveRepository.findUltimaByAulaDocumentoFecha(
             reserva.nombre_salon, reserva.solicitante_documento, diaStart, diaEnd
           );
@@ -498,9 +500,11 @@ class ReservaService {
     const diaNombre = DIAS_ES[fechaObj.getDay()];
     const progAcademica = await reservaRepository.findClasesRegulares(nombre_salon, diaNombre, fecha);
 
-    // Check for an active key loan in this salon on this date
-    const startOfDay = new Date(`${fecha}T00:00:00`);
-    const endOfDay = new Date(`${fecha}T23:59:59`);
+    // Check for an active key loan in this salon on this date — rango del
+    // día en ZONA_HORARIA_APP (offset fijo -05:00, sin DST), no hora local
+    // del servidor.
+    const startOfDay = new Date(`${fecha}T00:00:00-05:00`);
+    const endOfDay = new Date(`${fecha}T23:59:59.999-05:00`);
     const llaveActiva = await llaveRepository.findActivaByAulaFecha(nombre_salon, startOfDay, endOfDay);
 
     const slots = SLOTS.map((slot) => {
@@ -566,9 +570,10 @@ class ReservaService {
     }
 
     if (!prestamo) {
-      const fechaRef = new Date(`${reserva.fecha}T00:00:00`);
-      const diaStart = new Date(fechaRef); diaStart.setHours(0, 0, 0, 0);
-      const diaEnd = new Date(fechaRef); diaEnd.setHours(23, 59, 59, 999);
+      // Rango del día en ZONA_HORARIA_APP (offset fijo -05:00, sin DST) — no
+      // depender de la hora local del servidor.
+      const diaStart = new Date(`${reserva.fecha}T00:00:00-05:00`);
+      const diaEnd = new Date(`${reserva.fecha}T23:59:59.999-05:00`);
       prestamo = await llaveRepository.findUltimaByAulaDocumentoFecha(
         reserva.nombre_salon, reserva.solicitante_documento, diaStart, diaEnd
       );

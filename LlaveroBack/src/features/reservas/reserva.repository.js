@@ -105,7 +105,22 @@ class ReservaRepository {
     };
     if (data.estado !== undefined) payload.estado = data.estado;
 
-    const [row] = await this.db(TABLES.RESERVAS).insert(payload).returning('*');
+    let row;
+    try {
+      [row] = await this.db(TABLES.RESERVAS).insert(payload).returning('*');
+    } catch (err) {
+      // `ux_reservas_slot` (007, mismo hora_inicio exacto) dispara 23505;
+      // `ex_reservas_no_overlap` (017, cualquier solape de rango horario)
+      // dispara 23P01 — mismo patrón de traducción a error de negocio legible
+      // que `llave.workflows.js#persistirPrestamoConDedupe`.
+      if (err.code === '23505') {
+        throw ApiError.conflict('Ya existe una reserva para ese salón, fecha y hora de inicio');
+      }
+      if (err.code === '23P01') {
+        throw ApiError.conflict('Este salón ya tiene una reserva que se cruza con ese horario');
+      }
+      throw err;
+    }
     return this.findById(row.id);
   }
 

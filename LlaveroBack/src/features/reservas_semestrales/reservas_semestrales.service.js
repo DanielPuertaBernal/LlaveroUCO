@@ -528,7 +528,7 @@ class ReservasSemestralesService {
           });
           logger.info('Monitor registrado para franja semestral', { monitor: franja.monitor_documento, franja: franja.dia });
         } catch (e) {
-          if (e.code !== 11000) logger.warn('No se pudo registrar monitor de franja', { err: e.message });
+          if (e.code !== '23505') logger.warn('No se pudo registrar monitor de franja', { err: e.message });
         }
       } else if (esEstudiante && datos.responsable_documento && datos.solicitante_documento) {
         try {
@@ -547,7 +547,7 @@ class ReservasSemestralesService {
           });
           logger.info('Estudiante registrado como monitor automático', { estudiante: datos.solicitante_documento, docente: datos.responsable_documento });
         } catch (e) {
-          if (e.code !== 11000) logger.warn('No se pudo registrar monitor automático', { err: e.message });
+          if (e.code !== '23505') logger.warn('No se pudo registrar monitor automático', { err: e.message });
         }
       }
     }
