@@ -9,6 +9,7 @@ export default function Layout() {
   const { usuario, refreshToken, logout } = useAuthStore();
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   async function handleLogout() {
     try {
@@ -23,17 +24,26 @@ export default function Layout() {
 
   return (
     <div className="flex h-screen bg-background">
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 md:hidden"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
       <Sidebar
         usuario={usuario}
         collapsed={collapsed}
         onToggle={() => setCollapsed((c) => !c)}
         onLogout={handleLogout}
+        mobileOpen={mobileOpen}
+        onCloseMobile={() => setMobileOpen(false)}
       />
 
       <div className="flex-1 flex flex-col min-w-0">
-        <TopBar />
+        <TopBar onOpenMenu={() => setMobileOpen(true)} />
         <main className="flex-1 overflow-auto">
-          <div className="p-6">
+          <div className="p-4 sm:p-6">
             <Outlet />
           </div>
         </main>

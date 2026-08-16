@@ -25,9 +25,8 @@ import ReservasListaTab from './ReservasListaTab';
 
 
 export default function ReservasPage() {
-  const [vista, setVista] = useState('reservas');
+  const [vista, setVista] = useState('nueva');
   const [filters, setFilters] = useState({ estado: '', nombre_bloque: '', fecha: getHoy() });
-  const [showForm, setShowForm] = useState(false);
   const [buscandoPersona, setBuscandoPersona] = useState(false);
   const [buscarForm, setBuscarForm] = useState({ fecha: getHoy(), hora_inicio: '', hora_fin: '', tipo_silleteria: '', capacidad_min: '' });
   const [buscarParams, setBuscarParams] = useState(null);
@@ -84,18 +83,9 @@ export default function ReservasPage() {
 
   const salonesVista = bloqueSeleccionado ? (porBloque[bloqueSeleccionado] || []) : salonesLibresFiltrados;
 
-  const salonesFiltrados = useMemo(
-    () => form.nombre_bloque ? salones.filter((s) => s.nombre_bloque === form.nombre_bloque) : salones,
-    [salones, form.nombre_bloque]
-  );
-
-  // Sincronizar showForm con la pestaña activa
-  useEffect(() => {
-    setShowForm(vista === 'nueva');
-  }, [vista]);
 
   useEffect(() => {
-    if (!showForm) return;
+    if (vista !== 'nueva') return;
     const onKeyDown = (e) => {
       if (e.key !== 'F1') return;
       e.preventDefault();
@@ -103,20 +93,20 @@ export default function ReservasPage() {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [showForm, objetivoEscaneo]);
+  }, [vista, objetivoEscaneo]);
 
   // Auto-búsqueda al escribir documento (sin Enter)
   useEffect(() => {
-    if (!showForm || !form.solicitante_documento || form.solicitante_documento.length < 5 || solicitanteEncontrado) return;
+    if (vista !== 'nueva' || !form.solicitante_documento || form.solicitante_documento.length < 5 || solicitanteEncontrado) return;
     const t = setTimeout(() => buscarPersona(form.solicitante_documento, 'solicitante'), 600);
     return () => clearTimeout(t);
-  }, [form.solicitante_documento, showForm]);
+  }, [form.solicitante_documento, vista]);
 
   useEffect(() => {
-    if (!showForm || form.tipo_solicitante !== 'estudiante' || !form.responsable_documento || form.responsable_documento.length < 5 || responsableEncontrado) return;
+    if (vista !== 'nueva' || form.tipo_solicitante !== 'estudiante' || !form.responsable_documento || form.responsable_documento.length < 5 || responsableEncontrado) return;
     const t = setTimeout(() => buscarPersona(form.responsable_documento, 'responsable'), 600);
     return () => clearTimeout(t);
-  }, [form.responsable_documento, showForm]);
+  }, [form.responsable_documento, vista]);
 
   function aplicarPersonaEnFormulario(persona, objetivo, identificadorFallback = '') {
     if (!persona) return;
@@ -248,7 +238,7 @@ export default function ReservasPage() {
     });
     if (!r.isConfirmed) return;
     try {
-      const resp = await cancelar.mutateAsync(String(row._id || row.id));
+      const resp = await cancelar.mutateAsync(String(row.id));
       const devolucionAuto = Boolean(resp?.data?.data?.devolucion_automatica_registrada);
       Swal.fire({
         icon: 'success',
@@ -293,7 +283,7 @@ export default function ReservasPage() {
 
   async function handleGuardarEdicion() {
     if (!editando?.reserva) return;
-    const id = String(editando.reserva._id || editando.reserva.id);
+    const id = String(editando.reserva.id);
     const payload = editando.modo === 'en_curso'
       ? { id, hora_fin: form.hora_fin, motivo: form.motivo }
       : { id, nombre_bloque: form.nombre_bloque, nombre_salon: form.nombre_salon, fecha: form.fecha, hora_inicio: form.hora_inicio, hora_fin: form.hora_fin, motivo: form.motivo };
@@ -338,6 +328,11 @@ export default function ReservasPage() {
     setVista('nueva');
   }
 
+  function abrirNuevaReserva() {
+    setEditando({ reserva: null, modo: null });
+    setVista('nueva');
+  }
+
   function cerrarForm() {
     setVista('reservas');
     setSolicitanteEncontrado(null);
@@ -372,24 +367,24 @@ export default function ReservasPage() {
         <div>
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
             <CalendarDays className="h-6 w-6" />
-            Reservas de Salones
+            Reservas Individuales
           </h1>
           <p className="text-muted-foreground text-sm">{reservas.length} reservas</p>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 border-b border-border pb-0">
+      <div className="flex gap-2 border-b border-border pb-0 overflow-x-auto">
         {[
-          { id: 'reservas', label: 'Reservas', icon: CalendarDays },
           { id: 'nueva', label: 'Nueva reserva', icon: Plus },
           { id: 'buscar', label: 'Buscar salón disponible', icon: Sparkles },
+          { id: 'reservas', label: 'Reservas', icon: CalendarDays },
         ].map(({ id, label, icon: Icon }) => (
           <button
             key={id}
-            onClick={() => setVista(id)}
+            onClick={() => (id === 'nueva' ? abrirNuevaReserva() : setVista(id))}
             className={cn(
-              'flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
+              'flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors shrink-0 whitespace-nowrap',
               vista === id
                 ? 'border-primary text-primary'
                 : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -416,12 +411,12 @@ export default function ReservasPage() {
           handleReservarDesdeResultado={handleReservarDesdeResultado}
         />
       )}
+
       {vista === 'nueva' && (
         <ReservasNuevaTab
           form={form}
           setForm={setForm}
-          bloques={bloques}
-          salonesFiltrados={salonesFiltrados}
+          salones={salones}
           disponibilidad={disponibilidad}
           solicitanteEncontrado={solicitanteEncontrado}
           setSolicitanteEncontrado={setSolicitanteEncontrado}

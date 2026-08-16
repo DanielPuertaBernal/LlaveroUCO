@@ -14,6 +14,7 @@ import MonitoresPage from '@/features/monitores/MonitoresPage';
 import PerfilPage from '@/features/perfil/PerfilPage';
 import SalonesPage from '@/features/salones/SalonesPage';
 import PorterosPage from '@/features/porteros/PorterosPage';
+import ConfiguracionPage from '@/features/configuracion/ConfiguracionPage';
 import NotificacionesPage from '@/features/notificaciones/NotificacionesPage';
 import NovedadesPage from '@/features/novedades/NovedadesPage';
 import ReservasSemestralesPage from '@/features/reservas_semestrales/ReservasSemestralesPage';
@@ -46,7 +47,6 @@ export default function App() {
             <Route path="/perfil" element={<PerfilPage />} />
 
             <Route path="/notificaciones-llaves" element={<Navigate to="/notificaciones" replace />} />
-            <Route path="/configuracion" element={<Navigate to="/notificaciones" replace />} />
 
             {/* Solo ADMIN */}
             <Route element={<ProtectedRoute roles={[ROLES.ADMIN]} />}>
@@ -54,6 +54,7 @@ export default function App() {
               <Route path="/comunidad" element={<ComunidadPage />} />
               <Route path="/salones" element={<SalonesPage />} />
               <Route path="/porteros" element={<PorterosPage />} />
+              <Route path="/configuracion" element={<ConfiguracionPage />} />
             </Route>
           </Route>
         </Route>
