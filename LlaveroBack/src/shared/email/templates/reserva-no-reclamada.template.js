@@ -30,7 +30,8 @@ function reservaNoReclamadaTemplate({ nombreSolicitante, salon, fecha, horaInici
               <p style="margin:0 0 16px;color:#3f3f46;font-size:14px;line-height:1.6;">
                 Su reserva para el salón <strong>${salon}</strong> el día <strong>${fecha}</strong>
                 de <strong>${horaInicio}</strong> a <strong>${horaFin}</strong> ha finalizado,
-                pero no se registró la entrega de la llave a través del sistema NFC.
+                pero no se registró que haya reclamado la llave del salón
+                durante ese horario.
               </p>
               <table width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0;background-color:#fffbeb;border-radius:6px;border:1px solid #fde68a;">
                 <tr>
@@ -45,8 +46,8 @@ function reservaNoReclamadaTemplate({ nombreSolicitante, salon, fecha, horaInici
                 </tr>
               </table>
               <p style="margin:0 0 8px;color:#3f3f46;font-size:14px;line-height:1.6;">
-                Si ya devolvió la llave, haga caso omiso de este mensaje.
-                De lo contrario, le solicitamos entregar la llave a la brevedad posible.
+                Si finalmente sí reclamó la llave y esto es un error, o si necesita hacer
+                una reserva nueva, por favor comuníquese con la portería o con administración.
               </p>
               <p style="margin:24px 0 0;color:#3f3f46;font-size:14px;line-height:1.6;">
                 Cordialmente,<br/>
