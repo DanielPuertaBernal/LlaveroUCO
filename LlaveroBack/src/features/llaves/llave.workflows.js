@@ -102,6 +102,24 @@ function createLlaveWorkflows({
     }
   }
 
+  /**
+   * Envuelve `persistirPrestamo` para traducir el `23505` (dedupe:
+   * comunidad_id + salon_id + dia_entrega + horario) a un error de negocio
+   * legible, igual que ya hacía `registrarEntrega` para el flujo manual —
+   * antes del fix de `dia_entrega` en `llave.domain.js` este índice nunca se
+   * disparaba desde NFC, así que no hacía falta este catch aquí.
+   */
+  async function persistirPrestamoConDedupe(payload) {
+    try {
+      return await persistirPrestamo(payload);
+    } catch (err) {
+      if (err.code === '23505') {
+        throw ApiError.conflict('La llave de este salón ya está en préstamo hoy');
+      }
+      throw err;
+    }
+  }
+
   /** Procesa la devolución de una llave a partir del contexto NFC. */
   async function resolverResultadoDevolucion({ contexto, persona, documento, ubicacion, user }) {
     try {
@@ -170,7 +188,7 @@ function createLlaveWorkflows({
 
       await verificarPermiso(user, { salonNombre: claseReserva.aula }, OPERACIONES_UBICACION.PRESTAMO_LLAVES);
 
-      const { registro } = await persistirPrestamo({
+      const { registro } = await persistirPrestamoConDedupe({
         docente: {
           numero_documento: reservaPendiente.solicitante_documento,
           nombre: reservaPendiente.solicitante_nombre,
@@ -220,7 +238,7 @@ function createLlaveWorkflows({
 
     await verificarPermiso(user, { salonNombre: claseTarget.aula }, OPERACIONES_UBICACION.PRESTAMO_LLAVES);
 
-    const { registro, vinculosReservaIndividual } = await persistirPrestamo({
+    const { registro, vinculosReservaIndividual } = await persistirPrestamoConDedupe({
       docente: contexto.docente,
       clase: claseTarget,
       seReclamoATiempo,
@@ -342,7 +360,7 @@ function createLlaveWorkflows({
     await verificarPermiso(user, { salonNombre: clase.aula }, OPERACIONES_UBICACION.PRESTAMO_LLAVES);
 
     const docente = await findDocenteByDocumento(docenteDoc);
-    const { registro, vinculosReservaIndividual } = await persistirPrestamo({
+    const { registro, vinculosReservaIndividual } = await persistirPrestamoConDedupe({
       docente: docente || persona,
       clase,
       seReclamoATiempo: true,
@@ -413,15 +431,12 @@ function createLlaveWorkflows({
       grupoClase,
     });
 
-    // Fecha del día sin hora para el índice único de prevención de duplicados
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
-
+    // `dia_entrega` ya viene fijado (hora local de Bogotá) desde
+    // `construirRegistroPrestamo`, igual que en el flujo NFC.
     let created;
     const vinculosReservaIndividual = [];
     try {
       for (const registro of registros) {
-        registro.dia_entrega = hoy;
         const origenClase = registro._origenClase;
         created = await createRegistro(registro);
         if (origenClase?._origen === 'individual' && origenClase?.id) {

@@ -327,6 +327,12 @@ function construirRegistroPrestamo({
     // el id de su propia tabla (`reservas`), que rompería el FK si se
     // guardara acá.
     programacion_id: programacionId ?? (clase?._origen === 'individual' ? null : clase?.id ?? null),
+    // Necesario para que la guarda de duplicados (dedupe por
+    // comunidad_id+salon_id+dia_entrega+horario) aplique también al flujo
+    // NFC/carnet — antes solo se fijaba en la entrega manual, así que dos
+    // lecturas NFC duplicadas para la misma franja nunca chocaban (NULL no
+    // es igual a NULL en un índice único de Postgres).
+    dia_entrega: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }),
     fecha_hora_entrega: new Date(),
     fecha_hora_devolucion: null,
     duracion_minutos: null,
