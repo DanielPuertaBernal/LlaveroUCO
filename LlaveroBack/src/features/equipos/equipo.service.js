@@ -45,14 +45,24 @@ class EquipoService {
     const codigoBase = codigo_inventario ? String(codigo_inventario).split('-')[0] : '';
     const codigo_barras = codigoBase ? `INV-${codigoBase}-${String(cons).padStart(3, '0')}` : '';
 
-    return equipoRepository.create({
-      nombre: normalizeString(nombre),
-      marca: normalizeString(marca),
-      consecutivo: cons,
-      codigo_inventario: codigo_inventario ? normalizeString(codigo_inventario) : null,
-      codigo_barras,
-      descripcion: normalizeString(descripcion),
-    });
+    try {
+      return await equipoRepository.create({
+        nombre: normalizeString(nombre),
+        marca: normalizeString(marca),
+        consecutivo: cons,
+        codigo_inventario: codigo_inventario ? normalizeString(codigo_inventario) : null,
+        codigo_barras,
+        descripcion: normalizeString(descripcion),
+      });
+    } catch (err) {
+      // Respaldo ante la carrera del check-then-insert de arriba: dos altas
+      // concurrentes con el mismo código pasan ambas la validación previa,
+      // pero solo una gana el índice único `ux_equipos_codigo_inventario`.
+      if (err.code === '23505') {
+        throw ApiError.conflict(`Ya existe un equipo con código '${codigo_inventario}'`);
+      }
+      throw err;
+    }
   }
 
   async actualizar(id, datos) {
@@ -86,9 +96,16 @@ class EquipoService {
       updates.codigo_barras = `INV-${codigoBase}-${String(consecutivoFinal).padStart(3, '0')}`;
     }
 
-    const updated = await equipoRepository.update(id, updates);
-    if (!updated) throw ApiError.notFound('Equipo no encontrado');
-    return updated;
+    try {
+      const updated = await equipoRepository.update(id, updates);
+      if (!updated) throw ApiError.notFound('Equipo no encontrado');
+      return updated;
+    } catch (err) {
+      if (err.code === '23505') {
+        throw ApiError.conflict(`Ya existe un equipo con código '${updates.codigo_inventario}'`);
+      }
+      throw err;
+    }
   }
 
   async eliminar(id) {

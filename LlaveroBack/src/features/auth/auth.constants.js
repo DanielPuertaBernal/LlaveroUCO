@@ -37,7 +37,8 @@ const DOMINIOS_AUTORIZADOS = ['uco.edu.co', 'uco.net.co'];
  */
 function isDominioAutorizado(email) {
   const normalizado = String(email || '').trim().toLowerCase();
-  const dominio = normalizado.split('@')[1] || '';
+  const [usuario, dominio] = normalizado.split('@');
+  if (!usuario || !dominio) return false;
   return DOMINIOS_AUTORIZADOS.includes(dominio);
 }
 
