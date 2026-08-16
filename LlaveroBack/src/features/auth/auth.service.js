@@ -94,9 +94,9 @@ class AuthService {
 
     let idTokenPayload;
     try {
-      idTokenPayload = oauth.decodeIdTokenPayload(tokens.id_token);
+      idTokenPayload = await oauth.decodeIdTokenPayload(tokens.id_token);
     } catch (err) {
-      logger.error('Callback Office365: id_token inválido', err);
+      logger.error('Callback Office365: id_token inválido o firma no verificable', err);
       return { ok: false, reason: 'invalid_id_token' };
     }
 
@@ -208,13 +208,27 @@ class AuthService {
   }
 
   _resolveRefreshExpiryDate() {
+    return new Date(Date.now() + this._getRefreshTokenMaxAgeMs());
+  }
+
+  _getRefreshTokenMaxAgeMs() {
     const raw = String(process.env.JWT_REFRESH_EXPIRES_IN || '7d').trim().toLowerCase();
     const amount = parseInt(raw, 10) || 7;
 
     if (raw.endsWith('h')) {
-      return new Date(Date.now() + (amount * 60 * 60 * 1000));
+      return amount * 60 * 60 * 1000;
     }
-    return new Date(Date.now() + (amount * 24 * 60 * 60 * 1000));
+    return amount * 24 * 60 * 60 * 1000;
+  }
+
+  /**
+   * Duración (ms) que debe usarse como `maxAge` de la cookie httpOnly del
+   * refresh token, sincronizada con la expiración real firmada en el JWT
+   * (`JWT_REFRESH_EXPIRES_IN`) para que la cookie nunca sobreviva al token.
+   * @returns {number}
+   */
+  getRefreshCookieMaxAgeMs() {
+    return this._getRefreshTokenMaxAgeMs();
   }
 
   async _persistRefreshSession(user, refreshToken, context = {}) {

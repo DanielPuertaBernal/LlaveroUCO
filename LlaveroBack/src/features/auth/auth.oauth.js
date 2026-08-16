@@ -1,5 +1,6 @@
 'use strict';
 const crypto = require('crypto');
+const { createRemoteJWKSet, jwtVerify } = require('jose');
 
 /**
  * Helpers puros del protocolo OAuth2 / Microsoft Identity Platform (v2.0)
@@ -143,27 +144,51 @@ async function exchangeCodeForTokens(code) {
   return data;
 }
 
+// JWKS remoto de Microsoft cacheado en memoria por proceso (createRemoteJWKSet
+// ya implementa su propio cache/refresh de claves internamente). Se crea de
+// forma perezosa —no al cargar el módulo— porque `AZURE_TENANT_ID` puede no
+// estar seteada en ambientes donde el login Office365 nunca se usa (ver nota
+// en `server.js`).
+let jwksCache = null;
+
+function getJwks() {
+  if (!jwksCache) {
+    const tenantId = getEnv('AZURE_TENANT_ID');
+    jwksCache = createRemoteJWKSet(
+      new URL(`https://login.microsoftonline.com/${tenantId}/discovery/v2.0/keys`)
+    );
+  }
+  return jwksCache;
+}
+
 /**
- * Decodifica el payload del `id_token` (JWT) devuelto por Microsoft.
- *
- * LIMITACIÓN ACEPTADA: no verifica la firma del JWT contra las claves
- * públicas JWKS de Microsoft (`/discovery/v2.0/keys`). El token llega por un
- * canal servidor-a-servidor autenticado con `client_secret` (HTTPS directo
- * al endpoint `/token` de Microsoft, no reenviado por el navegador), lo que
- * acota el riesgo de suplantación, pero esto NO es una verificación
- * criptográfica completa del emisor/audiencia/expiración del token. Para
- * robustecer este punto, validar la firma contra el JWKS del tenant antes de
- * confiar en el claim de email.
+ * Verifica la firma criptográfica del `id_token` (JWT) devuelto por
+ * Microsoft contra el JWKS público del tenant, y valida `iss`/`aud`, antes
+ * de confiar en cualquier claim (incluido el email). Reemplaza el decode
+ * "a ciegas" anterior: ya no basta con que el token llegue por un canal
+ * servidor-a-servidor autenticado, se verifica criptográficamente.
  * @param {string} idToken
- * @returns {object}
+ * @returns {Promise<object>} payload verificado del JWT
  */
-function decodeIdTokenPayload(idToken) {
+async function decodeIdTokenPayload(idToken) {
   const parts = String(idToken || '').split('.');
   if (parts.length !== 3) {
     throw new Error('id_token con formato inválido');
   }
-  const payloadJson = Buffer.from(parts[1], 'base64url').toString('utf8');
-  return JSON.parse(payloadJson);
+
+  const tenantId = getEnv('AZURE_TENANT_ID');
+  const clientId = getEnv('AZURE_CLIENT_ID');
+  const jwks = getJwks();
+
+  const { payload } = await jwtVerify(idToken, jwks, {
+    issuer: [
+      `https://login.microsoftonline.com/${tenantId}/v2.0`,
+      `https://sts.windows.net/${tenantId}/`,
+    ],
+    audience: clientId,
+  });
+
+  return payload;
 }
 
 /**

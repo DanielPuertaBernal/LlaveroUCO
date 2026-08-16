@@ -8,8 +8,11 @@ const { authLimiter, refreshLimiter } = require('../../shared/middlewares/rate.l
 
 const router = Router();
 
+// El refresh token ahora viaja principalmente como cookie httpOnly
+// (`req.cookies.refreshToken`, ver `auth.controller.js`); se deja opcional
+// en el body como transición para clientes que aún no migraron a cookies.
 const refreshSchema = z.object({
-  refreshToken: z.string().min(1, 'refreshToken requerido'),
+  refreshToken: z.string().min(1, 'refreshToken requerido').optional(),
 });
 
 /**

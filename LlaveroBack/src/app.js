@@ -4,6 +4,7 @@ require('express-async-errors');
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
+const cookieParser = require('cookie-parser');
 
 const errorHandler = require('./shared/middlewares/error.handler');
 const requestLogger = require('./shared/middlewares/request.logger');
@@ -32,6 +33,10 @@ const reservasSemestralesRoutes = require('./features/reservas_semestrales/reser
 
 const app = express();
 
+// Confía en el primer proxy inverso (nginx/load balancer) para que `req.ip`
+// y los rate limiters vean la IP real del cliente en vez de la del proxy.
+app.set('trust proxy', 1);
+
 // ── Middlewares globales ──────────────────────────────────────────────────────
 app.use(helmet());
 app.use(cors({
@@ -40,6 +45,7 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
 app.use(requestLogger);
 
 // ── Health check ─────────────────────────────────────────────────────────────
