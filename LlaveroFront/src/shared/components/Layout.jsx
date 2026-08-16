@@ -14,8 +14,11 @@ export default function Layout() {
   async function handleLogout() {
     try {
       await authApi.logout();
-    } catch (_) {
-      // Si el backend no responde, igual limpiamos la sesión local.
+    } catch (err) {
+      // Si el backend no responde, igual limpiamos la sesión local — pero
+      // se deja constancia en consola en vez de tragarse el error en
+      // silencio (la sesión del servidor pudo quedar sin revocar).
+      console.warn('No se pudo revocar la sesión en el servidor al cerrar sesión', err);
     } finally {
       logout();
       navigate('/login');

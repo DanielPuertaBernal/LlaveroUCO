@@ -54,14 +54,16 @@ apiClient.interceptors.response.use(
           }
         } catch (refreshError) {
           refreshPromise = null;
+          // `logout()` limpia el estado de Zustand; `ProtectedRoute` ya
+          // reacciona a `isAuthenticated=false` y redirige a /login por
+          // navegación de React Router — no hace falta un reload duro que
+          // tire el estado de la app en memoria.
           logout();
-          window.location.href = '/login';
           return Promise.reject(refreshError);
         }
       }
 
       logout();
-      window.location.href = '/login';
     }
 
     return Promise.reject(error);
