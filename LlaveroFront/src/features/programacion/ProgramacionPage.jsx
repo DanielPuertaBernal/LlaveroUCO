@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DataTable from '@/shared/components/DataTable';
 import FileUploader from '@/shared/components/FileUploader';
@@ -19,11 +19,13 @@ import {
   programacionApi,
 } from './programacionApi';
 import { useEntregarLlave } from '@/features/llaves/llavesApi';
+import { useMisBloques } from '@/features/porteros/porterosApi';
+import { useSalones } from '@/features/salones/salonesApi';
 import { abrirBuscadorPersonaPorNombre } from '@/shared/utils/personaSearchHotkey';
 import EditarClaseDialog from './EditarClaseDialog';
 import Swal from '@/shared/lib/swal';
 import { showSuccess, showError } from '@/shared/utils/alert';
-import { CalendarDays, Key, ChevronLeft, BookOpen, Trash2, Pencil, Upload, FileDown, PenSquare } from 'lucide-react';
+import { CalendarDays, Key, ChevronLeft, BookOpen, Trash2, Pencil, Upload, FileDown, PenSquare, Search } from 'lucide-react';
 import Button from '@/shared/components/ui/Button';
 import { FormField, Input } from '@/shared/components/ui/FormField';
 import {
@@ -38,12 +40,20 @@ import {
 import { cn } from '@/shared/lib/utils';
 
 const DIAS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+const DIA_LABEL = {
+  lunes: 'Lunes', martes: 'Martes', miercoles: 'Miércoles', jueves: 'Jueves',
+  viernes: 'Viernes', sabado: 'Sábado', domingo: 'Domingo',
+};
+
+function formatDia(v) {
+  return DIA_LABEL[String(v || '').toLowerCase()] || v;
+}
 
 const COLUMNAS_BASE = [
   { key: 'grupo', label: 'Grupo' },
   { key: 'codigo_materia', label: 'Código' },
   { key: 'docente', label: 'Docente' },
-  { key: 'dia', label: 'Día' },
+  { key: 'dia', label: 'Día', render: formatDia },
   { key: 'horario', label: 'Horario' },
   { key: 'aula', label: 'Aula' },
   { key: 'materia', label: 'Materia', className: 'whitespace-normal max-w-[200px]' },
@@ -65,11 +75,23 @@ function fechaToInput(fecha) {
   return d.toISOString().slice(0, 10);
 }
 
+/** Normaliza un nombre de salón para comparación tolerante (sin guiones/espacios/mayúsculas). */
+function normalizarNombreSalon(value = '') {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+}
+
 // ---------------------------------------------------------------------------
 // Vista de tabla para un semestre específico (admin drilldown o aux vigente)
 // ---------------------------------------------------------------------------
 function VistaSemestre({ semestre, onVolver, isAdmin }) {
   const navigate = useNavigate();
+  const { usuario } = useAuthStore();
+  const esPorteria = usuario?.rol === ROLES.PORTERIA;
+  const { data: misBloques = [] } = useMisBloques();
+  const { data: salones = [] } = useSalones({ enabled: esPorteria });
   const DAY_TO_DIA = { 0: 'Domingo', 1: 'Lunes', 2: 'Martes', 3: 'Miércoles', 4: 'Jueves', 5: 'Viernes', 6: 'Sábado' };
   const today = DAY_TO_DIA[new Date().getDay()] || 'Lunes';
   const [vistaCompleta, setVistaCompleta] = useState(false);
@@ -85,7 +107,7 @@ function VistaSemestre({ semestre, onVolver, isAdmin }) {
     semestre.codigo
   );
   const clasesPorDia = porDiaData?.clases ?? [];
-  const reservasSemestralesDelDia = porDiaData?.reservasSemestrales ?? [];
+  const reservasSemestralesDelDiaSinFiltrar = porDiaData?.reservasSemestrales ?? [];
 
   // Reservas semestrales del semestre (para pestaña admin)
   const { data: todasReservas = [], isLoading: loadingReservas } = useReservasSemestrales(
@@ -97,13 +119,40 @@ function VistaSemestre({ semestre, onVolver, isAdmin }) {
 
   const entregarLlave = useEntregarLlave();
 
-  const registros = vistaCompleta ? completa : clasesPorDia;
+  // La vista "por día" es operativa (entrega de llaves) — las clases sin aula
+  // física no aportan nada ahí y solo generan ruido; se conservan en "completa".
+  const registrosSinFiltrarPorBloque = vistaCompleta
+    ? completa
+    : clasesPorDia.filter((r) => String(r.aula || '').trim().toUpperCase() !== 'NO REQUIERE AULA');
   const loading = vistaCompleta ? loadingCompleta : loadingDia;
 
   // Reservas filtradas por día en la vista admin
-  const reservasFiltradas = vistaCompleta
+  const reservasSinFiltrarPorBloque = vistaCompleta
     ? todasReservas
     : todasReservas.filter((r) => r.dia === diaSeleccionado);
+
+  // Portería: solo debe ver las clases/reservas de los bloques que tiene
+  // asignados (ej. Portería 1 → Bloque J no debe ver clases del Bloque M).
+  // Ni `registros` ni `reservasFiltradas` traen `nombre_bloque` directo
+  // desde el backend (solo `aula`), así que se deriva cruzando el aula
+  // contra el catálogo de salones (que sí trae `nombre_bloque` por salón).
+  const bloquesPermitidos = new Set(misBloques.map((b) => b.nombre_bloque));
+  const aulaABloque = new Map(
+    salones.map((s) => [normalizarNombreSalon(s.nombre_salon), s.nombre_bloque])
+  );
+
+  function filtrarPorBloquePorteria(rows) {
+    if (!esPorteria) return rows;
+    if (bloquesPermitidos.size === 0) return [];
+    return rows.filter((r) => {
+      const bloque = aulaABloque.get(normalizarNombreSalon(r.aula));
+      return bloque ? bloquesPermitidos.has(bloque) : false;
+    });
+  }
+
+  const registros = filtrarPorBloquePorteria(registrosSinFiltrarPorBloque);
+  const reservasFiltradas = filtrarPorBloquePorteria(reservasSinFiltrarPorBloque);
+  const reservasSemestralesDelDia = filtrarPorBloquePorteria(reservasSemestralesDelDiaSinFiltrar);
 
   async function handleEntregarDesdeTabla(clase) {
     // Paso 1: ¿quién recibe?
@@ -200,7 +249,7 @@ function VistaSemestre({ semestre, onVolver, isAdmin }) {
     });
     if (!confirm.isConfirmed) return;
     try {
-      const id = row._id ?? row.id;
+      const id = row.id;
       await eliminarReservaIndividual.mutateAsync(id);
       showSuccess('Franja eliminada');
     } catch (err) {
@@ -218,7 +267,7 @@ function VistaSemestre({ semestre, onVolver, isAdmin }) {
     navigate('/reservas-semestrales', {
       state: {
         editData: {
-          _id: primera._id,
+          id: primera.id,
           grupo_id: primera.grupo_id,
           semestre: primera.semestre,
           numero_documento: primera.numero_documento,
@@ -290,7 +339,7 @@ function VistaSemestre({ semestre, onVolver, isAdmin }) {
           <div>
             <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
               <CalendarDays className="h-6 w-6" />
-              Programación — Semestre {semestre.codigo}
+              Semestre {semestre.codigo}
             </h1>
             <p className="text-muted-foreground text-sm">
               {formatFecha(semestre.fecha_inicio)} al {formatFecha(semestre.fecha_fin)}
@@ -392,19 +441,23 @@ function VistaSemestre({ semestre, onVolver, isAdmin }) {
                   : <span className="text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full font-medium dark:bg-slate-800 dark:text-slate-300">Clase</span>,
             },
             ...COLUMNAS_BASE,
-            {
+            ...(vistaCompleta ? [] : [{
               key: '_entregar',
               label: 'Llave',
-              render: (_v, row) => (
-                <Button variant="outline" size="sm" onClick={() => handleEntregarDesdeTabla(row)} disabled={entregarLlave.isPending}>
-                  <Key className="h-3.5 w-3.5 mr-1" />Entregar
-                </Button>
-              ),
-            },
+              render: (_v, row) => {
+                if (String(row.aula || '').trim().toUpperCase() === 'NO REQUIERE AULA') return null;
+                return (
+                  <Button variant="outline" size="sm" onClick={() => handleEntregarDesdeTabla(row)} disabled={entregarLlave.isPending}>
+                    <Key className="h-3.5 w-3.5 mr-1" />Entregar
+                  </Button>
+                );
+              },
+            }]),
           ]}
           data={isAdmin ? [...registros, ...reservasFiltradas] : [...registros, ...reservasSemestralesDelDia]}
           loading={loading}
           searchable
+          extraSearchKeys={['numero_documento']}
           exportable
           exportFileName={`programacion_${semestre.codigo}`}
           onRowDoubleClick={(row) => setDetailRow(row)}
@@ -482,7 +535,7 @@ function VistaSemestre({ semestre, onVolver, isAdmin }) {
             );
             return (
               <div className="space-y-4 text-sm">
-                <div className="grid grid-cols-3 gap-x-6 gap-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-4">
                   <F label="Tipo">{tipoBadge}</F>
                   <F label="Código materia"><span className="font-mono font-semibold">{detailRow.codigo_materia || '—'}</span></F>
                   <F label="Total estudiantes">{detailRow.total_estudiantes ?? detailRow.estudiantes_matriculados ?? '—'}</F>
@@ -510,7 +563,7 @@ function VistaSemestre({ semestre, onVolver, isAdmin }) {
                       <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Fantasmas asociados</span>
                       <span className="text-xs font-bold bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400 px-2 py-0.5 rounded-full">{fantasmasDeEste.length}</span>
                     </div>
-                    <div className="grid grid-cols-2 gap-2 p-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 p-3">
                       {fantasmasDeEste.map(({ key, codigo_materia, grupo, materia }) => (
                         <div key={key} className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-md px-3 py-2">
                           <div className="flex items-center gap-1.5 mb-0.5">
@@ -631,6 +684,14 @@ function TarjetasSemestres({ semestres, loading, onSeleccionar, importar, onImpo
   const eliminar = useEliminarSemestre();
   const [semestreEditando, setSemestreEditando] = useState(null);
 
+  // Filtro simple del listado de semestres por su código (ej. "2026-2").
+  const [busqueda, setBusqueda] = useState('');
+  const semestresFiltrados = useMemo(() => {
+    const q = busqueda.trim().toLowerCase();
+    if (!q) return semestres;
+    return semestres.filter((s) => s.codigo.toLowerCase().includes(q));
+  }, [semestres, busqueda]);
+
   async function handleEliminar(sem, e) {
     e.stopPropagation();
     const confirm = await Swal.fire({
@@ -689,14 +750,31 @@ function TarjetasSemestres({ semestres, loading, onSeleccionar, importar, onImpo
           />
         </div>
 
+        {semestres.length > 0 && (
+          <div className="relative max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <input
+              type="text"
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              placeholder="Buscar semestre (ej: 2026-2)..."
+              className="w-full h-9 pl-9 pr-3 rounded-lg border border-border bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+        )}
+
         {semestres.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-muted-foreground gap-3">
             <BookOpen className="h-12 w-12 opacity-30" />
             <p className="text-sm">No hay semestres cargados. Importa un archivo Excel para comenzar.</p>
           </div>
+        ) : semestresFiltrados.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-8 text-center">
+            Ningún semestre coincide con "{busqueda}".
+          </p>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {semestres.map((sem) => (
+            {semestresFiltrados.map((sem) => (
               <div
                 key={sem.codigo}
                 onClick={() => onSeleccionar(sem)}
