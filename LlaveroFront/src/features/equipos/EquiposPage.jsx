@@ -304,7 +304,7 @@ export default function EquiposPage() {
       />
 
       <Sheet open={sheetOpen} onOpenChange={(open) => { if (!open) cerrarSheet(); }}>
-        <SheetContent>
+        <SheetContent className="max-w-2xl">
           <SheetHeader>
             <SheetTitle>{equipoEditando ? 'Editar equipo' : 'Registrar nuevo equipo'}</SheetTitle>
             <SheetDescription>
@@ -313,7 +313,7 @@ export default function EquiposPage() {
           </SheetHeader>
 
           <div className="overflow-y-auto flex-1 pr-1">
-            <form id="equipo-form" onSubmit={handleSubmit(onGuardar)} className="space-y-3 pt-2">
+            <form id="equipo-form" onSubmit={handleSubmit(onGuardar)} className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
               <FormField label="Nombre del equipo" required error={errors.nombre?.message}>
                 <Input {...register('nombre', { required: 'Nombre del equipo es requerido' })} />
               </FormField>
@@ -322,23 +322,21 @@ export default function EquiposPage() {
                 <Input {...register('marca')} />
               </FormField>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <FormField label="Consecutivo" required error={errors.consecutivo?.message}>
-                  <Input
-                    type="number"
-                    inputMode="numeric"
-                    min="1"
-                    {...register('consecutivo', { required: 'Consecutivo es requerido' })}
-                  />
-                </FormField>
-                <FormField label="Código de inventario" error={errors.codigo_inventario?.message}>
-                  <Input
-                    {...register('codigo_inventario', {
-                      onChange: (e) => e.target.value = soloAlfanumericoConGuion(e.target.value),
-                    })}
-                  />
-                </FormField>
-              </div>
+              <FormField label="Consecutivo" required error={errors.consecutivo?.message}>
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  min="1"
+                  {...register('consecutivo', { required: 'Consecutivo es requerido' })}
+                />
+              </FormField>
+              <FormField label="Código de inventario" error={errors.codigo_inventario?.message}>
+                <Input
+                  {...register('codigo_inventario', {
+                    onChange: (e) => e.target.value = soloAlfanumericoConGuion(e.target.value),
+                  })}
+                />
+              </FormField>
 
               {equipoEditando && (
                 <FormField label="Estado">
@@ -350,7 +348,7 @@ export default function EquiposPage() {
                 </FormField>
               )}
 
-              <FormField label="Descripción">
+              <FormField label="Descripción" className={equipoEditando ? '' : 'sm:col-span-2'}>
                 <Input {...register('descripcion')} />
               </FormField>
             </form>

@@ -25,6 +25,7 @@ function tiempoTranscurrido(fechaInicio, fechaFin = null) {
 }
 import StatusBadge from '@/shared/components/ui/StatusBadge';
 import Button from '@/shared/components/ui/Button';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from '@/shared/components/ui/Sheet';
 import { FormField, Input, Select } from '@/shared/components/ui/FormField';
 import { cn } from '@/shared/lib/utils';
 import { abrirBuscadorPersonaPorNombre } from '@/shared/utils/personaSearchHotkey';
@@ -505,21 +506,21 @@ export default function PrestamosPage() {
           <p className="text-muted-foreground text-sm">{prestamos.length} abiertos</p>
         </div>
         {!esPorteria && (
-          <Button onClick={() => setShowForm((v) => !v)}>
-            {showForm ? 'Cerrar formulario' : '+ Nuevo Préstamo'}
+          <Button onClick={() => setShowForm(true)}>
+            + Nuevo Préstamo
           </Button>
         )}
       </div>
 
-      {showForm && !esPorteria && (
-        <div className="bg-card border-2 border-primary/30 rounded-xl p-6">
-          <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
-            <h2 className="font-semibold text-foreground">Registrar préstamo</h2>
-            <button onClick={() => setShowForm(false)} className="text-sm text-muted-foreground hover:text-foreground underline">Cancelar</button>
-          </div>
+      {!esPorteria && (
+        <Sheet open={showForm} onOpenChange={(open) => !open && setShowForm(false)}>
+          <SheetContent className="sm:max-w-3xl">
+            <SheetHeader>
+              <SheetTitle>Registrar préstamo</SheetTitle>
+            </SheetHeader>
 
-          <div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
               {/* ── Columna izquierda: datos del solicitante ── */}
               <div className="space-y-3">
@@ -681,8 +682,13 @@ export default function PrestamosPage() {
                 </Button>
               </div>
             </div>
-          </div>
-        </div>
+            </div>
+
+            <SheetFooter>
+              <Button variant="outline" onClick={() => setShowForm(false)}>Cancelar</Button>
+            </SheetFooter>
+          </SheetContent>
+        </Sheet>
       )}
 
       {!showForm && (
