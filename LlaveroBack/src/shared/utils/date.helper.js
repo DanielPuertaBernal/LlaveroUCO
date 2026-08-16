@@ -31,12 +31,14 @@ function getDiaActual() {
 }
 
 /**
- * Retorna la fecha actual en formato YYYY-MM-DD
+ * Retorna la fecha actual en formato YYYY-MM-DD, en hora LOCAL del servidor.
+ * `toISOString()` da la fecha en UTC — en Colombia (UTC-5) eso ya muestra el
+ * día siguiente entre las 7pm y medianoche, desalineando esta fecha con
+ * `getDiaActual()` (que sí usa hora local) y con cualquier filtro de "hoy".
  * @returns {string}
  */
 function getFechaHoy() {
-  const now = new Date();
-  return now.toISOString().split('T')[0];
+  return new Date().toLocaleDateString('en-CA');
 }
 
 /**

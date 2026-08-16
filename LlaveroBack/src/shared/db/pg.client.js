@@ -22,6 +22,17 @@ const log = createLogger('Postgres');
  */
 pgTypes.setTypeParser(1082, (val) => val);
 
+/**
+ * Postgres devuelve columnas `time` (OID 1083) como "HH:MM:SS" — los
+ * segundos nunca se usan (ni en negocio ni en UI, todo el horario académico
+ * se maneja en minutos) y el "10:00:00 A 13:00:00" resultante en cada
+ * `horario` construido (llave.domain.js, programacion.service.js,
+ * reserva.service.js, reservas_semestrales.service.js, etc.) se veía
+ * innecesariamente técnico. Se trunca acá, en el driver, para no tener que
+ * repetir el recorte en cada uno de esos call sites.
+ */
+pgTypes.setTypeParser(1083, (val) => (val ? val.slice(0, 5) : val));
+
 class PgClient {
   constructor() {
     this._knex = null;

@@ -81,13 +81,17 @@ class LlaveRepository {
       .leftJoin(`${TABLES.COMUNIDAD} as c_reclama`, 'c_reclama.id', `${TABLES.REGISTROS_LLAVES}.reclama_comunidad_id`)
       .leftJoin(`${TABLES.COMUNIDAD} as c_entrega`, 'c_entrega.id', `${TABLES.REGISTROS_LLAVES}.entrega_comunidad_id`)
       .leftJoin(`${TABLES.USUARIOS} as u_gestion`, 'u_gestion.id', `${TABLES.REGISTROS_LLAVES}.gestionado_por_usuario_id`)
+      .leftJoin(`${TABLES.UBICACIONES_OPERATIVAS} as uo_prestamo`, 'uo_prestamo.id', `${TABLES.REGISTROS_LLAVES}.ubicacion_prestamo_id`)
+      .leftJoin(`${TABLES.UBICACIONES_OPERATIVAS} as uo_devolucion`, 'uo_devolucion.id', `${TABLES.REGISTROS_LLAVES}.ubicacion_devolucion_id`)
       .whereNull(`${TABLES.REGISTROS_LLAVES}.deleted_at`)
       .select(
         `${TABLES.REGISTROS_LLAVES}.*`,
         'c_reg.numero_documento as numero_documento',
         'c_reclama.numero_documento as numero_documento_reclama',
         'c_entrega.numero_documento as numero_documento_entrega',
-        'u_gestion.rol as gestionado_por_rol'
+        'u_gestion.rol as gestionado_por_rol',
+        'uo_prestamo.clave as ubicacion_prestamo',
+        'uo_devolucion.clave as ubicacion_devolucion'
       );
   }
 
