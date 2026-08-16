@@ -102,9 +102,8 @@ class PrestamoService {
     );
 
     const equiposIds = this._normalizarEquipos(equipos);
-    const knex = pgClient.getKnex();
 
-    const prestamoId = await knex.transaction(async (trx) => {
+    const prestamoId = await this._ejecutarTransaccionConDedupe(async (trx) => {
       const equiposMap = await this._cargarEquiposDisponibles(equiposIds, trx);
       const prestamoAbierto = await prestamoRepository.findActivoByDocente(docente_codigo_nfc, trx);
       this._validarNoDuplicadosEnPrestamo(prestamoAbierto, equiposIds, equiposMap);
@@ -157,9 +156,8 @@ class PrestamoService {
    */
   async agregarEquipo(prestamoId, equipoId, auxiliar, user = null) { // eslint-disable-line no-unused-vars
     await verificarPermisoPrestamoEquipos(user);
-    const knex = pgClient.getKnex();
 
-    await knex.transaction(async (trx) => {
+    await this._ejecutarTransaccionConDedupe(async (trx) => {
       const prestamo = await prestamoRepository.findById(prestamoId, trx);
       if (!prestamo) throw ApiError.notFound('Préstamo no encontrado');
       if (prestamo.estado === 'completamente_devuelto') {
@@ -283,6 +281,33 @@ class PrestamoService {
     return { devolucion, prestamo_estado: nuevoEstado };
   }
 
+  /**
+   * Ejecuta `fn` dentro de un `knex.transaction()` y traduce un `23505`
+   * (unique_violation) de Postgres a un conflicto amigable — mismo patrón
+   * que `persistirPrestamoConDedupe` en `llave.workflows.js`. El único
+   * índice único parcial que `crear`/`agregarEquipo` pueden violar hoy es
+   * `ux_prestamo_equipos_equipo_activo` (017_...js), que dispara
+   * exactamente cuando dos préstamos concurrentes intentan entregar el
+   * mismo `equipo_id` — la app ya valida esto antes con
+   * `_validarDisponibilidad`/`.forUpdate()`, así que llegar aquí solo
+   * ocurre en la ventana de carrera que la validación en dos pasos no
+   * cierra por sí sola.
+   * @template T
+   * @param {(trx: import('knex').Knex.Transaction) => Promise<T>} fn
+   * @returns {Promise<T>}
+   */
+  async _ejecutarTransaccionConDedupe(fn) {
+    const knex = pgClient.getKnex();
+    try {
+      return await knex.transaction(fn);
+    } catch (err) {
+      if (err.code === '23505') {
+        throw ApiError.conflict('Este equipo ya está prestado');
+      }
+      throw err;
+    }
+  }
+
   _normalizarEquipos(equipos) {
     const normalizados = equipos.map((item) => {
       if (typeof item === 'string') return item;
@@ -311,7 +336,11 @@ class PrestamoService {
   }
 
   async _cargarEquiposDisponibles(equiposIds, trx = null) {
-    const equipos = await equipoRepository.findByIds(equiposIds);
+    // `trx || undefined`: `findByIds` usa `executor = this.db` como valor
+    // por defecto — pasar explícitamente `null` lo pisaría. Con `trx` la
+    // lectura de disponibilidad corre dentro de la misma transacción que
+    // la escritura con la que compite (ver nota en `equipo.repository.js`).
+    const equipos = await equipoRepository.findByIds(equiposIds, trx || undefined);
     const equiposMap = new Map(equipos.map((equipo) => [String(equipo.id), equipo]));
 
     const faltantes = equiposIds.filter((id) => !equiposMap.has(String(id)));

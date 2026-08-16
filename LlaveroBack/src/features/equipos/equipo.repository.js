@@ -17,24 +17,31 @@ class EquipoRepository extends BaseRepository {
 
   /**
    * @param {string} id
-   * @param {*} [session] - No aplica en Postgres; se conserva el parámetro
-   *   por compatibilidad con llamadores aún no migrados (p. ej.
-   *   prestamo.service.js dentro de una transacción Mongoose).
+   * @param {import('knex').Knex|import('knex').Knex.Transaction} [executor]
    * @returns {Promise<object|null>}
    */
-  async findById(id, session = null) { // eslint-disable-line no-unused-vars
-    const row = await this.table.where({ id }).whereNull('deleted_at').first();
+  async findById(id, executor = this.db) {
+    const row = await executor(this.tableName).where({ id }).whereNull('deleted_at').first();
     return row || null;
   }
 
   /**
    * @param {string[]} ids
-   * @param {*} [session] - No aplica en Postgres; ver nota en findById.
+   * @param {import('knex').Knex|import('knex').Knex.Transaction} [executor]
+   *   - Antes ignoraba este parámetro por completo (comentario original:
+   *   "No aplica en Postgres"), heredado de cuando era un `session` de
+   *   Mongoose que sí importaba pasar. Eso dejaba la lectura de
+   *   disponibilidad de `prestamo.service.js#_cargarEquiposDisponibles`
+   *   fuera de la transacción — una lectura obsoleta respecto a la
+   *   escritura concurrente con la que compite (ver
+   *   `findEquiposPrestados`/`findActivoByDocente` con `.forUpdate()` en
+   *   `prestamo.repository.js`). Ahora si se pasa `trx` la consulta corre
+   *   dentro de esa misma transacción.
    * @returns {Promise<object[]>}
    */
-  async findByIds(ids = [], session = null) { // eslint-disable-line no-unused-vars
+  async findByIds(ids = [], executor = this.db) {
     if (!ids.length) return [];
-    return this.table.whereIn('id', ids).whereNull('deleted_at');
+    return executor(this.tableName).whereIn('id', ids).whereNull('deleted_at');
   }
 
   /** @param {string} codigo @returns {Promise<object|null>} */

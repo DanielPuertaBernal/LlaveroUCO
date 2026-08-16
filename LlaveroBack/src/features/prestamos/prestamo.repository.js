@@ -118,6 +118,15 @@ class PrestamoRepository {
     const row = await this._headerQuery(executor)
       .where(`${TABLES.PRESTAMOS}.docente_codigo_nfc`, codigoNfc)
       .whereIn(`${TABLES.PRESTAMOS}.estado`, ['activo', 'parcialmente_devuelto'])
+      // `.forUpdate(TABLES.PRESTAMOS)` en vez de un `.forUpdate()` sin
+      // argumentos: `_headerQuery` hace LEFT JOIN contra `comunidad` y
+      // `ubicaciones_operativas`, y Postgres rechaza `FOR UPDATE` sin
+      // `OF <tabla>` sobre el lado nullable de un outer join
+      // ("FOR UPDATE cannot be applied to the nullable side of an outer
+      // join"). Restringir el lock a `prestamos` alcanza para serializar
+      // esta lectura-para-decidir contra la escritura concurrente que
+      // compite por el mismo docente dentro de la transacción.
+      .forUpdate(TABLES.PRESTAMOS)
       .first();
     if (!row) return null;
     const [withEquipos] = await this._attachEquipos([row], executor);
@@ -187,6 +196,14 @@ class PrestamoRepository {
    */
   async findEquiposPrestados(equiposIds = [], executor = this.db) {
     if (!equiposIds.length) return [];
+    // Nota: sin `.distinct()` — Postgres no permite `FOR UPDATE` junto con
+    // `DISTINCT`/`GROUP BY`/agregados (la fila bloqueada debe corresponder
+    // 1:1 con una fila física de la tabla). El deduplicado de `equipo_id`
+    // se hace en JS con el `Set` de abajo; antes de la guarda de esta fase
+    // (índice único parcial `ux_prestamo_equipos_equipo_activo`,
+    // 017_...js) podían existir varias líneas 'entregado' para el mismo
+    // `equipo_id` (justo el bug que se está corrigiendo), así que sigue
+    // haciendo falta.
     const rows = await executor(TABLES.PRESTAMO_EQUIPOS)
       .join(TABLES.PRESTAMOS, `${TABLES.PRESTAMOS}.id`, `${TABLES.PRESTAMO_EQUIPOS}.prestamo_id`)
       .whereIn(`${TABLES.PRESTAMO_EQUIPOS}.equipo_id`, equiposIds)
@@ -194,8 +211,17 @@ class PrestamoRepository {
       .whereNull(`${TABLES.PRESTAMO_EQUIPOS}.deleted_at`)
       .whereIn(`${TABLES.PRESTAMOS}.estado`, ['activo', 'parcialmente_devuelto'])
       .whereNull(`${TABLES.PRESTAMOS}.deleted_at`)
-      .distinct(`${TABLES.PRESTAMO_EQUIPOS}.equipo_id as equipo_id`);
-    return rows.map((r) => r.equipo_id);
+      // Lock explícito sobre `prestamo_equipos` (join interno con
+      // `prestamos`, ambos lados no-nullables, pero se restringe igual
+      // por claridad/consistencia con `findActivoByDocente`): serializa
+      // esta lectura-para-decidir contra inserciones concurrentes de
+      // líneas para el mismo `equipo_id` dentro de la transacción — la
+      // guarda definitiva sigue siendo el índice único parcial
+      // `ux_prestamo_equipos_equipo_activo` (017_...js) para cualquier
+      // caller que no pase `trx`.
+      .forUpdate(TABLES.PRESTAMO_EQUIPOS)
+      .select(`${TABLES.PRESTAMO_EQUIPOS}.equipo_id as equipo_id`);
+    return [...new Set(rows.map((r) => r.equipo_id))];
   }
 
   /**
