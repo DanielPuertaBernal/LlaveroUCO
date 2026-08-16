@@ -155,19 +155,30 @@ class LlaveService {
     });
   }
 
-  async obtenerPendientes() {
-    const raw = await llaveRepository.findPendientes();
+  /**
+   * Portería solo debe ver las llaves que ella misma gestionó (mismo
+   * `usuario_id`), nunca las de otra portería aunque compartan bloque.
+   * Admin/aux ven la lista completa sin filtrar (comportamiento previo).
+   * @param {{sub:string, rol:string}} [user]
+   * @returns {string|null}
+   */
+  #filtroPorteriaDe(user) {
+    return user?.rol === ROLES.PORTERIA ? user.sub : null;
+  }
+
+  async obtenerPendientes(user = null) {
+    const raw = await llaveRepository.findPendientes(this.#filtroPorteriaDe(user));
     const pendientes = await formatearPendientes(raw, formatRegistroLlave);
     return this.#enriquecerConCorreos(pendientes);
   }
 
-  async obtenerTodosPendientes() {
-    const raw = await llaveRepository.findPendientes();
+  async obtenerTodosPendientes(user = null) {
+    const raw = await llaveRepository.findPendientes(this.#filtroPorteriaDe(user));
     return this.#enriquecerConCorreos(raw.map(formatRegistroLlave));
   }
 
-  async obtenerPendientesHoy() {
-    const raw = await llaveRepository.findPendientesByFecha(getFechaHoy());
+  async obtenerPendientesHoy(user = null) {
+    const raw = await llaveRepository.findPendientesByFecha(getFechaHoy(), this.#filtroPorteriaDe(user));
     return formatearPendientes(raw, formatRegistroLlave);
   }
 

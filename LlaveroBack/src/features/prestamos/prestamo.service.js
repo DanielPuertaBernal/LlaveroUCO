@@ -28,16 +28,31 @@ const {
 const logger = createLogger('Prestamos');
 
 /**
- * Gate de autorización por rol para préstamo/devolución de equipos.
+ * Gate de autorización por rol para PRÉSTAMO de equipos (crear un préstamo
+ * nuevo o agregar un equipo a uno abierto). Regla de negocio: portería
+ * nunca puede prestar equipos, sin importar los flags de `portero_bloques`
+ * — solo puede recibirlos de vuelta (ver `verificarPermisoRecepcionEquipos`).
+ * Solo admin/aux pueden prestar equipos.
+ * @param {{sub:string, rol:string}} user
+ */
+async function verificarPermisoPrestamoEquipos(user) {
+  if (!user) throw ApiError.unauthorized('No autenticado');
+  if (user.rol === ROLES.ADMIN || user.rol === ROLES.AUX) return;
+
+  throw ApiError.forbidden('La portería no puede prestar equipos, solo recibirlos');
+}
+
+/**
+ * Gate de autorización por rol para RECEPCIÓN (devolución) de equipos.
  * Reemplaza la validación anterior contra `ubicaciones_operativas`. Los
  * equipos no están ligados a ningún salón/bloque en el modelo de datos
  * actual, así que a diferencia de las llaves (que sí se pueden acotar por
  * bloque del salón), portería solo puede tener este permiso habilitado o no
- * — si tiene el flag activo en al menos un bloque asignado, puede operar
+ * — si tiene el flag activo en al menos un bloque asignado, puede recibir
  * equipos sin más granularidad posible hoy.
  * @param {{sub:string, rol:string}} user
  */
-async function verificarPermisoEquipos(user) {
+async function verificarPermisoRecepcionEquipos(user) {
   if (!user) throw ApiError.unauthorized('No autenticado');
   if (user.rol === ROLES.ADMIN || user.rol === ROLES.AUX) return;
 
@@ -45,9 +60,9 @@ async function verificarPermisoEquipos(user) {
     throw ApiError.forbidden('Rol no autorizado para esta operación');
   }
 
-  const permitido = await porterosService.tienePermisoGlobal(user.sub, OPERACIONES_UBICACION.PRESTAMO_EQUIPOS);
+  const permitido = await porterosService.tienePermisoGlobal(user.sub, OPERACIONES_UBICACION.RECEPCION_EQUIPOS);
   if (!permitido) {
-    throw ApiError.forbidden('No tiene permiso de portería para préstamo/devolución de equipos');
+    throw ApiError.forbidden('No tiene permiso de portería para la recepción de equipos');
   }
 }
 
@@ -79,7 +94,7 @@ class PrestamoService {
       throw ApiError.badRequest('Debe prestar al menos un equipo');
     }
 
-    await verificarPermisoEquipos(user);
+    await verificarPermisoPrestamoEquipos(user);
 
     const ubicacionPrestamoClave = await this._validarUbicacionOperacion(
       ubicacion_prestamo,
@@ -141,7 +156,7 @@ class PrestamoService {
    * Agrega un equipo adicional a un préstamo existente.
    */
   async agregarEquipo(prestamoId, equipoId, auxiliar, user = null) { // eslint-disable-line no-unused-vars
-    await verificarPermisoEquipos(user);
+    await verificarPermisoPrestamoEquipos(user);
     const knex = pgClient.getKnex();
 
     await knex.transaction(async (trx) => {
@@ -182,7 +197,7 @@ class PrestamoService {
     auxiliar_que_recibio,
     ubicacion_devolucion = UBICACION_OFICINA,
   }, user = null) {
-    await verificarPermisoEquipos(user);
+    await verificarPermisoRecepcionEquipos(user);
 
     const ubicacionDevolucionClave = await this._validarUbicacionOperacion(
       ubicacion_devolucion,
@@ -350,8 +365,9 @@ class PrestamoService {
 
   /**
    * Ya NO autoriza la operación contra `ubicaciones_operativas` (ver
-   * `verificarPermisoEquipos`, que reemplaza ese gate por rol) — solo
-   * normaliza la clave para el snapshot histórico (`ubicacion_prestamo_id`/
+   * `verificarPermisoPrestamoEquipos`/`verificarPermisoRecepcionEquipos`,
+   * que reemplazan ese gate por rol) — solo normaliza la clave para el
+   * snapshot histórico (`ubicacion_prestamo_id`/
    * `ubicacion_devolucion_id`), que sigue existiendo por compatibilidad
    * aunque ya no se valide.
    */

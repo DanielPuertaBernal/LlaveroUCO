@@ -9,19 +9,19 @@ const {
 class LlaveController {
   /** GET /api/llaves/pendientes - Llaves pendientes agrupadas */
   async pendientes(req, res) {
-    const llaves = await llaveService.obtenerPendientes();
+    const llaves = await llaveService.obtenerPendientes(req.user);
     return res.json({ ok: true, data: { llaves } });
   }
 
   /** GET /api/llaves/pendientes/hoy */
   async pendientesHoy(req, res) {
-    const llaves = await llaveService.obtenerPendientesHoy();
+    const llaves = await llaveService.obtenerPendientesHoy(req.user);
     return res.json({ ok: true, data: { llaves } });
   }
 
   /** GET /api/llaves/pendientes/todos - Sin agrupar */
   async todosPendientes(req, res) {
-    const llaves = await llaveService.obtenerTodosPendientes();
+    const llaves = await llaveService.obtenerTodosPendientes(req.user);
     return res.json({ ok: true, data: { llaves } });
   }
 

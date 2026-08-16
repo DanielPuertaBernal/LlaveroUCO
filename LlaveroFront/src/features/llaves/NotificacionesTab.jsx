@@ -68,12 +68,12 @@ export default function NotificacionesTab() {
 
   const seleccionadosCount = Object.values(seleccionados).filter(Boolean).length;
   const seleccionadosList = useMemo(
-    () => pendientes.filter((p) => seleccionados[p._id]),
+    () => pendientes.filter((p) => seleccionados[p.id]),
     [pendientes, seleccionados]
   );
 
   const todosSeleccionados = pendientes.length > 0
-    && pendientes.filter((p) => p.correo).every((p) => seleccionados[p._id]);
+    && pendientes.filter((p) => p.correo).every((p) => seleccionados[p.id]);
 
   function toggleSeleccion(id) {
     setSeleccionados((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -85,7 +85,7 @@ export default function NotificacionesTab() {
     } else {
       const next = {};
       pendientes.forEach((p) => {
-        if (p.correo) next[p._id] = true;
+        if (p.correo) next[p.id] = true;
       });
       setSeleccionados(next);
     }
@@ -143,7 +143,7 @@ export default function NotificacionesTab() {
           ? `${p.fechaEntrega}T${p.horaEntrega}`
           : p.fechaEntrega || '',
         tiempo_transcurrido: calcularTiempoTranscurrido(p.fechaEntrega, p.horaEntrega),
-        llave_id: p._id,
+        llave_id: p.id,
       })),
       tipo_mensaje: tipoMensaje,
       mensaje_personalizado: tipoMensaje === 'personalizado' ? mensajePersonalizado : '',
@@ -177,10 +177,10 @@ export default function NotificacionesTab() {
       render: (_, row) => (
         <input
           type="checkbox"
-          checked={!!seleccionados[row._id]}
+          checked={!!seleccionados[row.id]}
           onChange={(e) => {
             e.stopPropagation();
-            toggleSeleccion(row._id);
+            toggleSeleccion(row.id);
           }}
           disabled={!row.correo}
           className="h-4 w-4 rounded border-border accent-primary disabled:opacity-40"
@@ -231,7 +231,7 @@ export default function NotificacionesTab() {
       key: '_recordatorios',
       label: 'Recordatorios',
       render: (_, row) => {
-        const count = contadores[row._id] ?? 0;
+        const count = contadores[row.id] ?? 0;
         const max = encontrarConfig(row.aula, configs).max_recordatorios ?? 5;
         const pct = max > 0 ? count / max : 0;
         const variant = pct >= 1 ? 'danger' : pct >= 0.5 ? 'warning' : 'neutral';
@@ -279,7 +279,7 @@ export default function NotificacionesTab() {
               </p>
               <div className="max-h-32 overflow-y-auto space-y-1">
                 {destinatariosSheet.map((p) => (
-                  <div key={p._id} className="text-sm text-foreground flex justify-between">
+                  <div key={p.id} className="text-sm text-foreground flex justify-between">
                     <span>{p.docente}</span>
                     <span className="text-muted-foreground text-xs">{p.correo}</span>
                   </div>

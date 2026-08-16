@@ -8,6 +8,7 @@ import {
 } from './porterosApi';
 import { useBloques } from '@/features/bloques/bloquesApi';
 import { showError, showSuccess, showConfirm } from '@/shared/utils/alert';
+import { soloNombre, soloNumerosConTope, LONGITUD_MAXIMA, esCorreoValido } from '@/shared/utils/inputValidation';
 import { ShieldCheck, Info } from 'lucide-react';
 import StatusBadge from '@/shared/components/ui/StatusBadge';
 import Button from '@/shared/components/ui/Button';
@@ -25,7 +26,7 @@ const PERMISOS = [
   { key: 'permite_identificacion', label: 'Identificación' },
   { key: 'permite_prestamo_llaves', label: 'Préstamo llaves' },
   { key: 'permite_devolucion_llaves', label: 'Devolución llaves' },
-  { key: 'permite_prestamo_equipos', label: 'Préstamo equipos' },
+  { key: 'permite_recepcion_equipos', label: 'Recepción de equipos' },
 ];
 
 function BloquesCell({ bloques = [] }) {
@@ -62,7 +63,7 @@ function construirBloquesEdicion(catalogo, asignadosActuales) {
       permite_identificacion: actual?.permite_identificacion ?? false,
       permite_prestamo_llaves: actual?.permite_prestamo_llaves ?? false,
       permite_devolucion_llaves: actual?.permite_devolucion_llaves ?? false,
-      permite_prestamo_equipos: actual?.permite_prestamo_equipos ?? false,
+      permite_recepcion_equipos: actual?.permite_recepcion_equipos ?? false,
     };
   });
 }
@@ -75,7 +76,7 @@ export default function PorterosPage() {
   const eliminar = useEliminarPortero();
 
   const [sheetNuevoOpen, setSheetNuevoOpen] = useState(false);
-  const [form, setForm] = useState({ email: '', nombre: '' });
+  const [form, setForm] = useState({ nombre: '', email: '', contacto: '' });
   const [errors, setErrors] = useState({});
 
   const [sheetBloquesOpen, setSheetBloquesOpen] = useState(false);
@@ -83,25 +84,30 @@ export default function PorterosPage() {
   const [bloquesEdicion, setBloquesEdicion] = useState([]);
 
   function abrirNuevo() {
-    setForm({ email: '', nombre: '' });
+    setForm({ nombre: '', email: '', contacto: '' });
     setErrors({});
     setSheetNuevoOpen(true);
   }
 
   function cerrarNuevo() {
     setSheetNuevoOpen(false);
-    setForm({ email: '', nombre: '' });
+    setForm({ nombre: '', email: '', contacto: '' });
     setErrors({});
   }
 
   async function guardarNuevo() {
     const errs = {};
     if (!form.email?.trim()) errs.email = 'El email es requerido';
+    else if (!esCorreoValido(form.email.trim())) errs.email = 'Correo no válido (ej: usuario@dominio.com)';
     if (!form.nombre?.trim()) errs.nombre = 'El nombre es requerido';
     if (Object.keys(errs).length) { setErrors(errs); return; }
 
     try {
-      await crear.mutateAsync({ email: form.email.trim(), nombre: form.nombre.trim() });
+      await crear.mutateAsync({
+        nombre: form.nombre.trim(),
+        email: form.email.trim(),
+        contacto: form.contacto?.trim() || '',
+      });
       showSuccess('Portero creado correctamente');
       cerrarNuevo();
     } catch (error) {
@@ -137,12 +143,12 @@ export default function PorterosPage() {
     if (!porteroEditando) return;
     const bloques = bloquesEdicion
       .filter((b) => b.seleccionado)
-      .map(({ bloque_id, permite_identificacion, permite_prestamo_llaves, permite_devolucion_llaves, permite_prestamo_equipos }) => ({
+      .map(({ bloque_id, permite_identificacion, permite_prestamo_llaves, permite_devolucion_llaves, permite_recepcion_equipos }) => ({
         bloque_id,
         permite_identificacion,
         permite_prestamo_llaves,
         permite_devolucion_llaves,
-        permite_prestamo_equipos,
+        permite_recepcion_equipos,
       }));
 
     try {
@@ -197,7 +203,7 @@ export default function PorterosPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
             <ShieldCheck className="h-6 w-6" />
@@ -226,19 +232,29 @@ export default function PorterosPage() {
           </SheetHeader>
 
           <div className="space-y-4">
-            <FormField label="Email" required error={errors.email}>
-              <Input
-                type="email"
-                placeholder="portero@uco.edu.co"
-                value={form.email || ''}
-                onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-              />
-            </FormField>
             <FormField label="Nombre" required error={errors.nombre}>
               <Input
                 placeholder="Nombre completo"
                 value={form.nombre || ''}
-                onChange={(e) => setForm((f) => ({ ...f, nombre: e.target.value }))}
+                onChange={(e) => setForm((f) => ({ ...f, nombre: soloNombre(e.target.value) }))}
+              />
+            </FormField>
+            <FormField label="Email" required error={errors.email}>
+              <Input
+                type="email"
+                placeholder="portero@uco.edu.co"
+                maxLength={100}
+                value={form.email || ''}
+                onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+              />
+            </FormField>
+            <FormField label="Contacto" error={errors.contacto}>
+              <Input
+                type="tel"
+                placeholder="Número de contacto"
+                maxLength={LONGITUD_MAXIMA.contacto}
+                value={form.contacto || ''}
+                onChange={(e) => setForm((f) => ({ ...f, contacto: soloNumerosConTope(e.target.value, LONGITUD_MAXIMA.contacto) }))}
               />
             </FormField>
           </div>

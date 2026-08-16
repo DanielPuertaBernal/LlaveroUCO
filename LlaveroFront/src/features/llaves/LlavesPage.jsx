@@ -17,6 +17,7 @@ import StatusBadge from '@/shared/components/ui/StatusBadge';
 import Button from '@/shared/components/ui/Button';
 import { FormField, Input, Select } from '@/shared/components/ui/FormField';
 import { cn } from '@/shared/lib/utils';
+import { soloNumerosConTope, LONGITUD_MAXIMA } from '@/shared/utils/inputValidation';
 
 dayjs.extend(customParseFormat);
 
@@ -357,7 +358,8 @@ export default function LlavesPage() {
                 value={lookupValue}
                 placeholder="Escanee carnet o escriba documento"
                 className="flex-1 border border-border rounded-lg px-3 py-2 text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                onChange={(e) => setLookupValue(e.target.value)}
+                maxLength={LONGITUD_MAXIMA.documento}
+                onChange={(e) => setLookupValue(soloNumerosConTope(e.target.value, LONGITUD_MAXIMA.documento))}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     e.preventDefault();
@@ -421,7 +423,7 @@ export default function LlavesPage() {
                         <div className="absolute z-20 mt-1 w-full bg-popover border border-border rounded-lg shadow-lg max-h-56 overflow-y-auto">
                           {sugerenciasAula.map((salon) => (
                             <button
-                              key={salon._id}
+                              key={salon.id}
                               type="button"
                               className="w-full text-left px-3 py-2 text-sm text-popover-foreground hover:bg-muted"
                               onMouseDown={(e) => e.preventDefault()}

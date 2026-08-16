@@ -8,10 +8,16 @@ class PorterosController {
     return res.json({ ok: true, data: { porteros } });
   }
 
+  /** GET /api/porteros/mis-bloques */
+  async misBloques(req, res) {
+    const bloques = await porterosService.misBloques(req.user.sub, req.user.rol);
+    return res.json({ ok: true, data: { bloques } });
+  }
+
   /** POST /api/porteros */
   async crear(req, res) {
-    const { email, nombre } = req.body;
-    const portero = await porterosService.crear(email, nombre);
+    const { email, nombre, contacto } = req.body;
+    const portero = await porterosService.crear(email, nombre, contacto);
     return res.status(201).json({ ok: true, message: 'Portero creado correctamente', data: { portero } });
   }
 

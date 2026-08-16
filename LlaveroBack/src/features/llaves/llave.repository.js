@@ -67,24 +67,43 @@ class LlaveRepository {
    * `numero_documento_entrega` que el resto del código (llave.domain.js,
    * llave.context.js, llave.read-model.js) sigue consumiendo por ese
    * nombre — mismo patrón usado por `programacion.repository.js` en S3.
+   *
+   * También hace LEFT JOIN con `usuarios` sobre `gestionado_por_usuario_id`
+   * para exponer `gestionado_por_rol`: `gestionado_por_usuario_id` se
+   * guarda igual sea quien sea (portería, admin o aux — ver
+   * `llave.workflows.js`), así que la regla de "misma portería devuelve"
+   * necesita saber el ROL de quien gestionó, no solo si el campo es NULL,
+   * para no aplicar la restricción quien entregó fue admin/aux.
    */
   _readQuery() {
     return this.db(TABLES.REGISTROS_LLAVES)
       .leftJoin(`${TABLES.COMUNIDAD} as c_reg`, 'c_reg.id', `${TABLES.REGISTROS_LLAVES}.comunidad_id`)
       .leftJoin(`${TABLES.COMUNIDAD} as c_reclama`, 'c_reclama.id', `${TABLES.REGISTROS_LLAVES}.reclama_comunidad_id`)
       .leftJoin(`${TABLES.COMUNIDAD} as c_entrega`, 'c_entrega.id', `${TABLES.REGISTROS_LLAVES}.entrega_comunidad_id`)
+      .leftJoin(`${TABLES.USUARIOS} as u_gestion`, 'u_gestion.id', `${TABLES.REGISTROS_LLAVES}.gestionado_por_usuario_id`)
       .whereNull(`${TABLES.REGISTROS_LLAVES}.deleted_at`)
       .select(
         `${TABLES.REGISTROS_LLAVES}.*`,
         'c_reg.numero_documento as numero_documento',
         'c_reclama.numero_documento as numero_documento_reclama',
-        'c_entrega.numero_documento as numero_documento_entrega'
+        'c_entrega.numero_documento as numero_documento_entrega',
+        'u_gestion.rol as gestionado_por_rol'
       );
   }
 
-  /** @returns {Promise<object[]>} Registros con préstamo activo (en_prestamo, en_mora, demora_entrega) */
-  async findPendientes() {
-    return this._readQuery().whereIn(`${TABLES.REGISTROS_LLAVES}.estado`, ['en_prestamo', 'en_mora', 'demora_entrega']);
+  /**
+   * @param {string|null} [filtroUsuarioId] - cuando se pasa, restringe a los
+   * registros gestionados por ese `usuario_id` (usado para que una portería
+   * solo vea las llaves que ella misma entregó, no las de otra portería).
+   * `null`/`undefined` => sin filtro (admin/aux ven todo, comportamiento previo).
+   * @returns {Promise<object[]>} Registros con préstamo activo (en_prestamo, en_mora, demora_entrega)
+   */
+  async findPendientes(filtroUsuarioId = null) {
+    const query = this._readQuery().whereIn(`${TABLES.REGISTROS_LLAVES}.estado`, ['en_prestamo', 'en_mora', 'demora_entrega']);
+    if (filtroUsuarioId) {
+      query.andWhere(`${TABLES.REGISTROS_LLAVES}.gestionado_por_usuario_id`, filtroUsuarioId);
+    }
+    return query;
   }
 
   /** @param {string} documento @returns {Promise<object|null>} */
@@ -116,13 +135,21 @@ class LlaveRepository {
     return this._readQuery().whereBetween(`${TABLES.REGISTROS_LLAVES}.fecha_hora_entrega`, [start, end]);
   }
 
-  /** @param {string} fechaStr - Formato YYYY-MM-DD @returns {Promise<object[]>} */
-  async findPendientesByFecha(fechaStr) {
+  /**
+   * @param {string} fechaStr - Formato YYYY-MM-DD
+   * @param {string|null} [filtroUsuarioId] - ver `findPendientes`
+   * @returns {Promise<object[]>}
+   */
+  async findPendientesByFecha(fechaStr, filtroUsuarioId = null) {
     const start = new Date(`${fechaStr}T00:00:00`);
     const end = new Date(`${fechaStr}T23:59:59.999`);
-    return this._readQuery()
+    const query = this._readQuery()
       .whereIn(`${TABLES.REGISTROS_LLAVES}.estado`, ['en_prestamo', 'en_mora', 'demora_entrega'])
       .andWhereBetween(`${TABLES.REGISTROS_LLAVES}.fecha_hora_entrega`, [start, end]);
+    if (filtroUsuarioId) {
+      query.andWhere(`${TABLES.REGISTROS_LLAVES}.gestionado_por_usuario_id`, filtroUsuarioId);
+    }
+    return query;
   }
 
   /** @param {object} filters @param {object|null} pagination @returns {Promise<object>} */

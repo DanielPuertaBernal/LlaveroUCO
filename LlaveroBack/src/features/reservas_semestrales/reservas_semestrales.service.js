@@ -11,6 +11,7 @@ const bloqueRepository = require('../bloques/bloque.repository');
 const reservaRepository = require('../reservas/reserva.repository');
 const monitorRepository = require('../monitores/monitor.repository');
 const ApiError = require('../../shared/errors/api.error');
+const { normalizeDocumento } = require('../../shared/utils/normalize.helper');
 const { parseExcel, cleanText, cleanDocumento, generateExcel } = require('../../shared/utils/excel.parser');
 const { createLogger } = require('../../shared/utils/logger');
 
@@ -420,6 +421,16 @@ class ReservasSemestralesService {
     for (const franja of datos.franjas) {
       if (franja.hora_inicio && franja.hora_fin && toMinCheck(franja.hora_fin) <= toMinCheck(franja.hora_inicio)) {
         throw ApiError.badRequest(`Franja ${franja.dia}: la hora fin debe ser posterior a la hora inicio`);
+      }
+    }
+
+    // Un monitor no puede ser la misma persona que el docente/responsable
+    // que está siendo cubierto en esa franja (ni el solicitante mismo).
+    const esEstudianteCheck = datos.tipo_solicitante === 'estudiante';
+    const docenteDocCheck = normalizeDocumento(esEstudianteCheck ? datos.responsable_documento : datos.solicitante_documento);
+    for (const franja of datos.franjas) {
+      if (franja.monitor_documento && normalizeDocumento(franja.monitor_documento) === docenteDocCheck && docenteDocCheck) {
+        throw ApiError.badRequest(`Franja ${franja.dia}: el monitor no puede ser la misma persona que el ${esEstudianteCheck ? 'profesor responsable' : 'docente'}`);
       }
     }
 

@@ -39,9 +39,15 @@ function reservaSemestralToClase(reserva) {
   };
 }
 
-/** Busca una persona de la comunidad por su ID de carnet NFC. */
+/**
+ * Busca una persona de la comunidad por su ID de carnet NFC, o por número de
+ * documento si no hay match de carnet (el modal de entrega acepta escribir
+ * el documento manualmente cuando no se tiene el carnet a mano).
+ */
 async function buscarPersonaPorCarnet(idCarnet) {
-  return comunidadRepository.findByCarnet(idCarnet);
+  const porCarnet = await comunidadRepository.findByCarnet(idCarnet);
+  if (porCarnet) return porCarnet;
+  return comunidadRepository.findByDocumento(normalizarDocumento(idCarnet));
 }
 
 /**

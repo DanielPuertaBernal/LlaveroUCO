@@ -2,7 +2,7 @@
 const { Router } = require('express');
 const { z } = require('zod');
 const porterosController = require('./porteros.controller');
-const { requireAdmin } = require('../auth/auth.middleware');
+const { requireAdmin, requireAuth } = require('../auth/auth.middleware');
 const { validate } = require('../../shared/middlewares/validate.middleware');
 
 const router = Router();
@@ -10,6 +10,7 @@ const router = Router();
 const crearSchema = z.object({
   email: z.string().trim().email('Email inválido'),
   nombre: z.string().trim().min(1, 'Nombre requerido'),
+  contacto: z.string().trim().optional().default(''),
 });
 
 const bloqueAsignacionSchema = z.object({
@@ -17,7 +18,7 @@ const bloqueAsignacionSchema = z.object({
   permite_identificacion: z.boolean().optional().default(false),
   permite_prestamo_llaves: z.boolean().optional().default(false),
   permite_devolucion_llaves: z.boolean().optional().default(false),
-  permite_prestamo_equipos: z.boolean().optional().default(false),
+  permite_recepcion_equipos: z.boolean().optional().default(false),
 });
 
 const asignarBloquesSchema = z.object({
@@ -55,6 +56,20 @@ router.get('/', ...requireAdmin, (req, res) => porterosController.listar(req, re
  *         description: El email ya existe
  */
 router.post('/', ...requireAdmin, validate(crearSchema), (req, res) => porterosController.crear(req, res));
+
+/**
+ * @openapi
+ * /porteros/mis-bloques:
+ *   get:
+ *     tags: [Porteros]
+ *     summary: Bloques asignados al usuario autenticado (solo si es portería; vacío en caso contrario)
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Bloques del usuario autenticado
+ */
+router.get('/mis-bloques', ...requireAuth, (req, res) => porterosController.misBloques(req, res));
 
 /**
  * @openapi

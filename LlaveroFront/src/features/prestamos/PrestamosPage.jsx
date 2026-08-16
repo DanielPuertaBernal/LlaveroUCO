@@ -7,6 +7,7 @@ import { equiposApi } from '@/features/equipos/equiposApi';
 import { comunidadApi } from '@/features/comunidad/comunidadApi';
 import { useUbicacionesOperativas } from '@/shared/hooks/useUbicacionesOperativas';
 import { showSuccess, showError, showWarning } from '@/shared/utils/alert';
+import { soloNumerosConTope, soloAlfanumericoConGuion, LONGITUD_MAXIMA } from '@/shared/utils/inputValidation';
 import { Package, Loader2, Search, CheckCircle2, History, Clock } from 'lucide-react';
 
 function tiempoTranscurrido(fechaInicio, fechaFin = null) {
@@ -27,6 +28,8 @@ import Button from '@/shared/components/ui/Button';
 import { FormField, Input, Select } from '@/shared/components/ui/FormField';
 import { cn } from '@/shared/lib/utils';
 import { abrirBuscadorPersonaPorNombre } from '@/shared/utils/personaSearchHotkey';
+import { useAuthStore } from '@/features/auth/authStore';
+import { ROLES } from '@/shared/constants';
 
 function EstadoBadge({ estado }) {
   const map = {
@@ -42,6 +45,8 @@ function EstadoBadge({ estado }) {
 }
 
 export default function PrestamosPage() {
+  const usuario = useAuthStore((s) => s.usuario);
+  const esPorteria = usuario?.rol === ROLES.PORTERIA;
   const [showForm, setShowForm] = useState(false);
   const [activeTab, setActiveTab] = useState('activos');
   const [detallePrestamoId, setDetallePrestamoId] = useState('');
@@ -77,12 +82,12 @@ export default function PrestamosPage() {
   const ultimoScanDevolucionRef = useRef('');
 
   const prestamoSeleccionado = useMemo(
-    () => prestamos.find((p) => String(p._id) === String(prestamoSeleccionadoId)) || null,
+    () => prestamos.find((p) => String(p.id) === String(prestamoSeleccionadoId)) || null,
     [prestamos, prestamoSeleccionadoId]
   );
 
   const detalleSeleccionado = useMemo(
-    () => [...prestamos, ...historialPrestamos].find((p) => String(p._id) === String(detallePrestamoId)) || null,
+    () => [...prestamos, ...historialPrestamos].find((p) => String(p.id) === String(detallePrestamoId)) || null,
     [prestamos, historialPrestamos, detallePrestamoId]
   );
 
@@ -230,10 +235,10 @@ export default function PrestamosPage() {
         }
       }
       if (!equipo) return showWarning('No se encontró equipo para ese código');
-      if (equiposSeleccionados.some((eq) => String(eq._id) === String(equipo._id))) {
+      if (equiposSeleccionados.some((eq) => String(eq.id) === String(equipo.id))) {
         return showWarning('Ese equipo ya está agregado al carrito');
       }
-      if (equipoPrestadoEnAbiertos(equipo._id)) {
+      if (equipoPrestadoEnAbiertos(equipo.id)) {
         return showWarning('Ese equipo ya se encuentra en un préstamo activo');
       }
       if (equipo.estado !== 'activo') {
@@ -249,14 +254,14 @@ export default function PrestamosPage() {
   }
 
   function quitarDelCarrito(equipoId) {
-    setEquiposSeleccionados((prev) => prev.filter((eq) => String(eq._id) !== String(equipoId)));
+    setEquiposSeleccionados((prev) => prev.filter((eq) => String(eq.id) !== String(equipoId)));
   }
 
   function agregarEquipoDirecto(equipo) {
-    if (equiposSeleccionados.some((eq) => String(eq._id) === String(equipo._id))) {
+    if (equiposSeleccionados.some((eq) => String(eq.id) === String(equipo.id))) {
       return showWarning('Ese equipo ya está agregado al carrito');
     }
-    if (equipoPrestadoEnAbiertos(equipo._id)) {
+    if (equipoPrestadoEnAbiertos(equipo.id)) {
       return showWarning('Ese equipo ya se encuentra en un préstamo activo');
     }
     if (equipo.estado !== 'activo') {
@@ -286,7 +291,7 @@ export default function PrestamosPage() {
         docente_responsable_codigo: solForm.responsable_codigo,
         docente_responsable_nombre: solForm.responsable_nombre,
         ubicacion_prestamo: ubicacionPrestamo,
-        equipos: equiposSeleccionados.map((eq) => String(eq._id)),
+        equipos: equiposSeleccionados.map((eq) => String(eq.id)),
       });
       setSolForm(SOL_FORM_INIT);
       setSolicitanteEncontrado(null);
@@ -344,7 +349,7 @@ export default function PrestamosPage() {
     try {
       for (const { equipo, novedad } of equiposParaDevolver) {
         const payload = {
-          prestamo_id: String(prestamoSeleccionado._id),
+          prestamo_id: String(prestamoSeleccionado.id),
           docente_codigo_nfc: prestamoSeleccionado.docente_codigo_nfc,
           docente_nombre: prestamoSeleccionado.docente_nombre,
           ubicacion_devolucion: ubicacionDevolucion,
@@ -373,8 +378,8 @@ export default function PrestamosPage() {
         const todos = res.data?.data?.equipos || [];
         const filtrados = todos.filter(
           (eq) =>
-            !equiposSeleccionados.some((s) => String(s._id) === String(eq._id)) &&
-            !equipoPrestadoEnAbiertos(eq._id)
+            !equiposSeleccionados.some((s) => String(s.id) === String(eq.id)) &&
+            !equipoPrestadoEnAbiertos(eq.id)
         );
         setSugerencias(filtrados);
         setShowSug(true);
@@ -423,7 +428,7 @@ export default function PrestamosPage() {
       label: 'Solicitante',
       render: (v, row) => (
         <button
-          onClick={() => setDetallePrestamoId(String(row._id))}
+          onClick={() => setDetallePrestamoId(String(row.id))}
           className="text-primary hover:underline font-medium text-left"
           title="Ver detalle"
         >
@@ -458,7 +463,7 @@ export default function PrestamosPage() {
       label: 'Solicitante',
       render: (v, row) => (
         <button
-          onClick={() => setDetallePrestamoId(String(row._id))}
+          onClick={() => setDetallePrestamoId(String(row.id))}
           className="text-primary hover:underline font-medium text-left"
           title="Ver detalle"
         >
@@ -491,7 +496,7 @@ export default function PrestamosPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
             <Package className="h-6 w-6" />
@@ -499,14 +504,16 @@ export default function PrestamosPage() {
           </h1>
           <p className="text-muted-foreground text-sm">{prestamos.length} abiertos</p>
         </div>
-        <Button onClick={() => setShowForm((v) => !v)}>
-          {showForm ? 'Cerrar formulario' : '+ Nuevo Préstamo'}
-        </Button>
+        {!esPorteria && (
+          <Button onClick={() => setShowForm((v) => !v)}>
+            {showForm ? 'Cerrar formulario' : '+ Nuevo Préstamo'}
+          </Button>
+        )}
       </div>
 
-      {showForm && (
+      {showForm && !esPorteria && (
         <div className="bg-card border-2 border-primary/30 rounded-xl p-6">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
             <h2 className="font-semibold text-foreground">Registrar préstamo</h2>
             <button onClick={() => setShowForm(false)} className="text-sm text-muted-foreground hover:text-foreground underline">Cancelar</button>
           </div>
@@ -522,12 +529,13 @@ export default function PrestamosPage() {
                     <Input
                       value={solForm.solicitante_codigo}
                       onChange={(e) => {
-                        setSolForm((f) => ({ ...f, solicitante_codigo: e.target.value, solicitante_nombre: '', solicitante_tipo: '', responsable_codigo: '', responsable_nombre: '' }));
+                        setSolForm((f) => ({ ...f, solicitante_codigo: soloNumerosConTope(e.target.value, LONGITUD_MAXIMA.documento), solicitante_nombre: '', solicitante_tipo: '', responsable_codigo: '', responsable_nombre: '' }));
                         setSolicitanteEncontrado(null);
                         setResponsableEncontrado(null);
                       }}
                       onKeyDown={(e) => e.key === 'Enter' && buscarPersona(solForm.solicitante_codigo, 'solicitante')}
                       placeholder="Escanee carnet o escriba documento"
+                      maxLength={LONGITUD_MAXIMA.documento}
                     />
                     <button
                       type="button"
@@ -561,11 +569,12 @@ export default function PrestamosPage() {
                         <Input
                           value={solForm.responsable_codigo}
                           onChange={(e) => {
-                            setSolForm((f) => ({ ...f, responsable_codigo: e.target.value, responsable_nombre: '' }));
+                            setSolForm((f) => ({ ...f, responsable_codigo: soloNumerosConTope(e.target.value, LONGITUD_MAXIMA.documento), responsable_nombre: '' }));
                             setResponsableEncontrado(null);
                           }}
                           onKeyDown={(e) => e.key === 'Enter' && buscarPersona(solForm.responsable_codigo, 'responsable')}
                           placeholder="Escriba el número de documento"
+                          maxLength={LONGITUD_MAXIMA.documento}
                         />
                         <button
                           type="button"
@@ -609,7 +618,7 @@ export default function PrestamosPage() {
                     <Input
                       ref={inputPrestamoRef}
                       value={barcodePrestamo}
-                      onChange={(e) => setBarcodePrestamo(e.target.value)}
+                      onChange={(e) => setBarcodePrestamo(soloAlfanumericoConGuion(e.target.value))}
                       onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); agregarPorCodigoBarras(); } }}
                       placeholder="Ej: INV-M-303-001"
                     />
@@ -630,7 +639,7 @@ export default function PrestamosPage() {
                       <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-card border border-border rounded-lg shadow-lg max-h-52 overflow-y-auto">
                         {sugerencias.map((eq) => (
                           <button
-                            key={String(eq._id)}
+                            key={String(eq.id)}
                             type="button"
                             onMouseDown={() => agregarEquipoDirecto(eq)}
                             className="w-full text-left px-3 py-2 hover:bg-muted flex items-center justify-between gap-2 text-sm"
@@ -653,12 +662,12 @@ export default function PrestamosPage() {
                   <label className="block text-sm font-medium text-foreground mb-2">Carrito ({equiposSeleccionados.length})</label>
                   <div className="max-h-52 overflow-y-auto border border-border rounded-lg divide-y divide-border">
                     {equiposSeleccionados.map((eq) => (
-                      <div key={String(eq._id)} className="flex items-center justify-between px-3 py-2 text-sm">
+                      <div key={String(eq.id)} className="flex items-center justify-between px-3 py-2 text-sm">
                         <div>
                           <p className="font-medium text-foreground">{eq.nombre}</p>
                           <p className="text-muted-foreground text-xs font-mono">{eq.codigo_barras || eq.codigo_inventario}</p>
                         </div>
-                        <button type="button" onClick={() => quitarDelCarrito(eq._id)} className="text-destructive hover:text-destructive/80 text-xs font-semibold shrink-0">Quitar</button>
+                        <button type="button" onClick={() => quitarDelCarrito(eq.id)} className="text-destructive hover:text-destructive/80 text-xs font-semibold shrink-0">Quitar</button>
                       </div>
                     ))}
                     {!equiposSeleccionados.length && (
@@ -709,8 +718,8 @@ export default function PrestamosPage() {
           {/* Table */}
           <div>
             {activeTab === 'activos'
-              ? <DataTable columns={columns} data={prestamos} loading={isLoading} searchable onRowClick={(row) => setDetallePrestamoId(String(row._id))} />
-              : <DataTable columns={historialColumns} data={historialPrestamos} loading={isLoadingHistorial} searchable onRowClick={(row) => setDetallePrestamoId(String(row._id))} />}
+              ? <DataTable columns={columns} data={prestamos} loading={isLoading} searchable onRowClick={(row) => setDetallePrestamoId(String(row.id))} />
+              : <DataTable columns={historialColumns} data={historialPrestamos} loading={isLoadingHistorial} searchable onRowClick={(row) => setDetallePrestamoId(String(row.id))} />}
           </div>
 
           {/* Modal de detalle */}
@@ -728,7 +737,7 @@ export default function PrestamosPage() {
                   onClose={() => setDetallePrestamoId('')}
                   getUbicacionLabel={getUbicacionLabel}
                   onGestionarDevolucion={detalleSeleccionado?.estado !== 'completamente_devuelto' ? () => {
-                    setPrestamoSeleccionadoId(String(detalleSeleccionado._id));
+                    setPrestamoSeleccionadoId(String(detalleSeleccionado.id));
                     setBarcodeDevolucion('');
                     setDetallePrestamoId('');
                     setTimeout(() => inputDevolucionRef.current?.focus(), 0);
@@ -779,7 +788,7 @@ export default function PrestamosPage() {
             <Input
               ref={inputDevolucionRef}
               value={barcodeDevolucion}
-              onChange={(e) => setBarcodeDevolucion(e.target.value)}
+              onChange={(e) => setBarcodeDevolucion(soloAlfanumericoConGuion(e.target.value))}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                   e.preventDefault();
@@ -794,7 +803,7 @@ export default function PrestamosPage() {
           </div>
 
           {/* Tabla de equipos pendientes — clic para agregar a la cola */}
-          <div className="max-h-44 overflow-y-auto border border-border rounded-lg">
+          <div className="max-h-44 overflow-y-auto overflow-x-auto border border-border rounded-lg">
             <table className="w-full text-sm">
               <thead className="bg-muted">
                 <tr>

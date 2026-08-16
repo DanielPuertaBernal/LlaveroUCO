@@ -26,14 +26,14 @@ class PorterosRepository {
   }
 
   /** @param {object} data @returns {Promise<object>} */
-  async crearUsuario({ email, nombre }) {
+  async crearUsuario({ email, nombre, contacto = '' }) {
     const [row] = await this.db(TABLES.USUARIOS)
       .insert({
         id: newId(),
         usuario: email,
         nombre,
         email,
-        contacto: '',
+        contacto,
         rol: ROLES.PORTERIA,
         hash_password: null,
         proveedor_auth: 'office365',
@@ -86,7 +86,7 @@ class PorterosRepository {
         `${TABLES.PORTERO_BLOQUES}.permite_identificacion`,
         `${TABLES.PORTERO_BLOQUES}.permite_prestamo_llaves`,
         `${TABLES.PORTERO_BLOQUES}.permite_devolucion_llaves`,
-        `${TABLES.PORTERO_BLOQUES}.permite_prestamo_equipos`
+        `${TABLES.PORTERO_BLOQUES}.permite_recepcion_equipos`
       );
   }
 
@@ -104,7 +104,7 @@ class PorterosRepository {
         `${TABLES.PORTERO_BLOQUES}.permite_identificacion`,
         `${TABLES.PORTERO_BLOQUES}.permite_prestamo_llaves`,
         `${TABLES.PORTERO_BLOQUES}.permite_devolucion_llaves`,
-        `${TABLES.PORTERO_BLOQUES}.permite_prestamo_equipos`
+        `${TABLES.PORTERO_BLOQUES}.permite_recepcion_equipos`
       );
   }
 
@@ -112,7 +112,7 @@ class PorterosRepository {
    * Reemplaza (soft-delete de las vigentes + inserción de las nuevas) las
    * filas de `portero_bloques` de un usuario portero.
    * @param {string} usuarioId
-   * @param {Array<{bloque_id:string, permite_identificacion?:boolean, permite_prestamo_llaves?:boolean, permite_devolucion_llaves?:boolean, permite_prestamo_equipos?:boolean}>} bloques
+   * @param {Array<{bloque_id:string, permite_identificacion?:boolean, permite_prestamo_llaves?:boolean, permite_devolucion_llaves?:boolean, permite_recepcion_equipos?:boolean}>} bloques
    * @returns {Promise<object[]>}
    */
   async reemplazarBloques(usuarioId, bloques) {
@@ -131,7 +131,7 @@ class PorterosRepository {
         permite_identificacion: Boolean(b.permite_identificacion),
         permite_prestamo_llaves: Boolean(b.permite_prestamo_llaves),
         permite_devolucion_llaves: Boolean(b.permite_devolucion_llaves),
-        permite_prestamo_equipos: Boolean(b.permite_prestamo_equipos),
+        permite_recepcion_equipos: Boolean(b.permite_recepcion_equipos),
       }));
 
       return trx(TABLES.PORTERO_BLOQUES).insert(payload).returning('*');

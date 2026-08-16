@@ -77,3 +77,42 @@ export function useDevolverLlave() {
     },
   });
 }
+
+/**
+ * Procesa una lectura de carnet NFC/manual: el backend decide si es entrega
+ * o devolución (o responde con un `tipo` de resultado distinto — selección
+ * múltiple, sin clase, anticipado, error). Ver `llave.workflows.js` en el
+ * backend para el contrato completo de `data.tipo`.
+ */
+export function useProcesarNFC() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: llavesApi.procesarNFC,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['llaves'] });
+      qc.invalidateQueries({ queryKey: ['programacion'] });
+    },
+  });
+}
+
+export function useDevolverPorId() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ubicacion }) => llavesApi.devolverPorId(id, ubicacion),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['llaves'] });
+      qc.invalidateQueries({ queryKey: ['novedades'] });
+    },
+  });
+}
+
+export function useConfirmarAnticipado() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: llavesApi.confirmarAnticipado,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['llaves'] });
+      qc.invalidateQueries({ queryKey: ['programacion'] });
+    },
+  });
+}

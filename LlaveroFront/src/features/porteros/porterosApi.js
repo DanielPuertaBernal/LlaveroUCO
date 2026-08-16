@@ -7,12 +7,24 @@ export const porterosApi = {
   actualizarBloques: (usuarioId, bloques) =>
     apiClient.put(`/porteros/${usuarioId}/bloques`, { bloques }),
   eliminar: (usuarioId) => apiClient.delete(`/porteros/${usuarioId}`),
+  misBloques: () => apiClient.get('/porteros/mis-bloques'),
 };
 
 export function usePorteros() {
   return useQuery({
     queryKey: ['porteros'],
     queryFn: () => porterosApi.listar().then((r) => r.data.data.porteros),
+  });
+}
+
+/**
+ * Bloques asignados al usuario autenticado (solo si es portería; `[]` en
+ * caso contrario, incluida una portería sin bloques asignados aún).
+ */
+export function useMisBloques() {
+  return useQuery({
+    queryKey: ['porteros', 'mis-bloques'],
+    queryFn: () => porterosApi.misBloques().then((r) => r.data.data.bloques),
   });
 }
 

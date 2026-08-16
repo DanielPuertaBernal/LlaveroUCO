@@ -1,6 +1,7 @@
 'use strict';
 
 const ApiError = require('../../shared/errors/api.error');
+const { ROLES } = require('../auth/auth.constants');
 const {
   OPERACIONES_UBICACION,
 } = require('../../shared/constants/nfc.constants');
@@ -43,6 +44,35 @@ function createLlaveWorkflows({
   validarEntregaManual,
   normalizarOrigenRegistro,
 }) {
+  /**
+   * Regla de negocio: la devolución de una llave prestada por una portería
+   * concreta (`registro.gestionado_por_usuario_id`) solo puede registrarla
+   * esa misma portería (mismo `usuario_id` — cada cuenta portero es un
+   * puesto físico fijo, no una persona individual). Otra portería, aunque
+   * tenga permiso de devolución en el mismo bloque, debe ser rechazada.
+   * Admin/aux no tienen esta restricción (acceso total, sin importar quién
+   * prestó). IMPORTANTE: `gestionado_por_usuario_id` se guarda siempre que
+   * hay un `user` (portería, admin o aux — ver `registrarEntrega`), así que
+   * NO basta con mirar si el campo es NULL para saber si "fue portería": se
+   * valida el ROL de quien gestionó (`registro.gestionado_por_rol`,
+   * expuesto por el JOIN de `llave.repository.js._readQuery` contra
+   * `usuarios`). Si el registro no viene de esa query (p. ej. un objeto
+   * plano recién insertado sin ese join) o el gestor no era portería, o no
+   * hay gestor, no se aplica ninguna restricción adicional — cualquier
+   * portería con permiso de bloque puede devolverla (comportamiento previo).
+   * @param {{sub:string, rol:string}} user
+   * @param {object} registro - el préstamo activo que se va a devolver
+   */
+  function verificarMismaPorteria(user, registro) {
+    if (!user || user.rol !== ROLES.PORTERIA) return;
+    const gestorId = registro?.gestionado_por_usuario_id;
+    if (!gestorId) return;
+    if (registro?.gestionado_por_rol !== ROLES.PORTERIA) return;
+    if (String(gestorId) !== String(user.sub)) {
+      throw ApiError.forbidden('Esta llave fue entregada por otra portería; solo esa portería puede registrar la devolución');
+    }
+  }
+
   function construirClaseDesdeReserva(reserva) {
     return {
       aula: reserva.nombre_salon,
@@ -67,6 +97,7 @@ function createLlaveWorkflows({
         { salonId: contexto.prestamoActivo?.salon_id },
         OPERACIONES_UBICACION.DEVOLUCION_LLAVES
       );
+      verificarMismaPorteria(user, contexto.prestamoActivo);
       const ubicacionDevolucion = await normalizarUbicacionDevolucion(ubicacion);
       const result = await persistirDevolucion(contexto.prestamoActivo, {
         canal: 'carnet',
@@ -376,6 +407,7 @@ function createLlaveWorkflows({
     }
 
     await verificarPermiso(user, { salonId: registro.salon_id }, OPERACIONES_UBICACION.DEVOLUCION_LLAVES);
+    verificarMismaPorteria(user, registro);
 
     const ubicacionDevolucion = await normalizarUbicacionDevolucion(ubicacion);
     const result = await persistirDevolucion(registro, {
@@ -394,6 +426,7 @@ function createLlaveWorkflows({
     }
 
     await verificarPermiso(user, { salonId: registro.salon_id }, OPERACIONES_UBICACION.DEVOLUCION_LLAVES);
+    verificarMismaPorteria(user, registro);
 
     const ubicacionDevolucion = await normalizarUbicacionDevolucion(ubicacion);
     const result = await persistirDevolucion(registro, {

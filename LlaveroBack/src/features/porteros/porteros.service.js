@@ -2,7 +2,7 @@
 const porterosRepository = require('./porteros.repository');
 const bloqueRepository = require('../bloques/bloque.repository');
 const ApiError = require('../../shared/errors/api.error');
-const { isDominioAutorizado } = require('../auth/auth.constants');
+const { isDominioAutorizado, ROLES } = require('../auth/auth.constants');
 const { createLogger } = require('../../shared/utils/logger');
 
 const logger = createLogger('Porteros');
@@ -11,19 +11,22 @@ const OPERACION_A_CAMPO = Object.freeze({
   identificacion: 'permite_identificacion',
   prestamo_llaves: 'permite_prestamo_llaves',
   devolucion_llaves: 'permite_devolucion_llaves',
-  prestamo_equipos: 'permite_prestamo_equipos',
+  // Portería nunca puede prestar equipos (ver prestamo.service.js); el
+  // único permiso de equipos que le queda es recibirlos de vuelta.
+  recepcion_equipos: 'permite_recepcion_equipos',
 });
 
 class PorterosService {
   /**
    * Crea un usuario portero (login exclusivamente vía Office365, igual que
    * el superadmin bootstrapeado en `server.js`: sin password local).
-   * @param {string} email @param {string} nombre
+   * @param {string} email @param {string} nombre @param {string} [contacto]
    * @returns {Promise<object>}
    */
-  async crear(email, nombre) {
+  async crear(email, nombre, contacto = '') {
     const correo = String(email || '').trim().toLowerCase();
     const nombreLimpio = String(nombre || '').trim();
+    const contactoLimpio = String(contacto || '').trim();
 
     if (!correo || !nombreLimpio) {
       throw ApiError.badRequest('email y nombre son requeridos');
@@ -37,7 +40,7 @@ class PorterosService {
       throw ApiError.conflict(`Ya existe un usuario con el email '${correo}'`);
     }
 
-    const creado = await porterosRepository.crearUsuario({ email: correo, nombre: nombreLimpio });
+    const creado = await porterosRepository.crearUsuario({ email: correo, nombre: nombreLimpio, contacto: contactoLimpio });
     logger.info('Portero creado', { email: correo });
     return { ...creado, bloques: [] };
   }
@@ -58,9 +61,20 @@ class PorterosService {
   }
 
   /**
+   * Bloques del propio usuario autenticado (self-service). Devuelve `[]` de
+   * inmediato para cualquier usuario que no sea portería, sin tocar la DB.
+   * @param {string} usuarioId @param {string} rol
+   * @returns {Promise<object[]>}
+   */
+  async misBloques(usuarioId, rol) {
+    if (rol !== ROLES.PORTERIA) return [];
+    return porterosRepository.findBloquesByUsuario(usuarioId);
+  }
+
+  /**
    * Reemplaza las asignaciones de bloque de un portero.
    * @param {string} usuarioId
-   * @param {Array<object>} bloques - [{ bloque_id, permite_identificacion, permite_prestamo_llaves, permite_devolucion_llaves, permite_prestamo_equipos }]
+   * @param {Array<object>} bloques - [{ bloque_id, permite_identificacion, permite_prestamo_llaves, permite_devolucion_llaves, permite_recepcion_equipos }]
    * @returns {Promise<object>}
    */
   async asignarBloques(usuarioId, bloques = []) {
