@@ -33,7 +33,7 @@ export default function PerfilPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-2xl mx-auto">
       {/* Header */}
       <div className="flex items-center gap-3">
         <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
@@ -68,7 +68,7 @@ export default function PerfilPage() {
       </div>
 
       {/* Editar perfil */}
-      <div className="bg-card border border-border rounded-xl p-5 space-y-4 max-w-lg">
+      <div className="bg-card border border-border rounded-xl p-5 space-y-4">
         <div className="flex items-center gap-2 pb-3 border-b border-border">
           <Pencil className="h-4 w-4 text-primary" />
           <h2 className="font-semibold text-foreground">Editar información</h2>
