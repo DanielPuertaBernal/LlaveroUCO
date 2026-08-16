@@ -5,6 +5,7 @@ export const llavesApi = {
   pendientes: () => apiClient.get('/llaves/pendientes'),
   todosPendientes: () => apiClient.get('/llaves/pendientes/todos'),
   hoy: () => apiClient.get('/llaves/dia'),
+  clasesProcesadasHoy: () => apiClient.get('/llaves/clases-hoy'),
   historial: (params) => apiClient.get('/llaves/historial', { params }),
   entregar: (data) => apiClient.post('/llaves/entregar', data),
   devolver: (payload) => {
@@ -45,6 +46,15 @@ export function useLlavesHoy() {
   return useQuery({
     queryKey: ['llaves', 'hoy'],
     queryFn: () => llavesApi.hoy().then((r) => r.data.data.llaves),
+    refetchInterval: 30000,
+  });
+}
+
+/** Pares {documento, aula} que ya tienen una llave registrada hoy (entregada o devuelta) — usado para no ofrecer "Entregar" dos veces. */
+export function useClasesProcesadasHoy() {
+  return useQuery({
+    queryKey: ['llaves', 'clases-hoy'],
+    queryFn: () => llavesApi.clasesProcesadasHoy().then((r) => r.data.data.clases),
     refetchInterval: 30000,
   });
 }

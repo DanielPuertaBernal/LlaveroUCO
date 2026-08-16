@@ -2,7 +2,7 @@
 
 const ApiError = require('../../shared/errors/api.error');
 const {
-  construirRegistroPrestamo,
+  construirRegistrosPrestamo,
   construirDatosDevolucion,
 } = require('./llave.domain');
 
@@ -35,7 +35,7 @@ async function persistirPrestamo({
   toClientFormat,
   toPlain,
 }) {
-  const registro = construirRegistroPrestamo({
+  const registros = construirRegistrosPrestamo({
     docente,
     clase,
     seReclamoATiempo,
@@ -47,8 +47,23 @@ async function persistirPrestamo({
     gestionadoPorUsuarioId,
   });
 
-  const created = await llaveRepository.create(registro);
-  return toClientFormat(toPlain(created));
+  // Si la clase venía de varias franjas consecutivas fusionadas, esto crea
+  // varios registros encadenados (ver `construirRegistrosPrestamo`); solo el
+  // último queda abierto ("en_prestamo") y es el que se devuelve como
+  // préstamo activo para el resto del flujo (devolución, UI). Si alguno de
+  // los registros de la cadena vino de una reserva individual en modo de
+  // reclamo diferido (`_origenClase._origen === 'individual'`), se recopila
+  // el vínculo para que el caller marque esa reserva como reclamada.
+  let created;
+  const vinculosReservaIndividual = [];
+  for (const registro of registros) {
+    const origenClase = registro._origenClase;
+    created = await llaveRepository.create(registro);
+    if (origenClase?._origen === 'individual' && origenClase?.id) {
+      vinculosReservaIndividual.push({ reservaId: origenClase.id, registroLlaveId: created.id });
+    }
+  }
+  return { registro: toClientFormat(toPlain(created)), vinculosReservaIndividual };
 }
 
 async function persistirDevolucion({

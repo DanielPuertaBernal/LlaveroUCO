@@ -5,6 +5,7 @@ const comunidadRepository = require('../comunidad/comunidad.repository');
 const programacionRepository = require('../programacion/programacion.repository');
 const monitorRepository = require('../monitores/monitor.repository');
 const reservasSemestralesRepository = require('../reservas_semestrales/reservas_semestrales.repository');
+const reservaRepository = require('../reservas/reserva.repository');
 const {
   getFechaHoy,
   getDiaActual,
@@ -40,6 +41,67 @@ function reservaSemestralToClase(reserva) {
 }
 
 /**
+ * Mapea una reserva individual en modo de reclamo diferido
+ * (`entregar_llave: false`, aún `pendiente_nfc`, no reclamada) al mismo
+ * formato de clase — mismo patrón que `reservaSemestralToClase`. Las
+ * reservas individuales en modo de entrega inmediata (`entregar_llave: true`,
+ * llave entregada en mostrador al crearse) no pasan por acá: esas no tienen
+ * un momento de reclamo posterior que encadenar.
+ * @param {object} reserva
+ * @returns {object}
+ */
+function reservaIndividualToClase(reserva) {
+  return {
+    id: reserva.id,
+    numero_documento: normalizarDocumento(reserva.solicitante_documento),
+    dia: getDiaActual(),
+    horario: `${reserva.hora_inicio} A ${reserva.hora_fin}`,
+    hora_inicio: reserva.hora_inicio || '',
+    hora_fin: reserva.hora_fin || '',
+    aula: reserva.nombre_salon || '',
+    facultad: 'Reserva Individual',
+    materia: reserva.motivo || 'Reserva de salón',
+    _origen: 'individual',
+  };
+}
+
+/**
+ * Trae y unifica, para un docente y fecha dados, todas las franjas de HOY en
+ * las que podría necesitar la llave de un salón: clases regulares de
+ * programación, reservas semestrales, y reservas individuales en modo de
+ * reclamo diferido. Las tres se mapean a la misma forma de "clase" para que
+ * `agruparClasesConsecutivas` pueda fusionar bloques consecutivos del mismo
+ * docente+aula sin importar de qué sistema vino cada uno.
+ * @param {string} documento
+ * @param {string} diaActual - nombre del día (ej. "Lunes"), para programación/RS
+ * @param {string} fecha - YYYY-MM-DD, para reservas individuales
+ * @returns {Promise<object[]>}
+ */
+async function obtenerFranjasDelDiaDocente(documento, diaActual, fecha) {
+  const [todasClases, reservasSemestralesHoy, reservasIndividualesHoy] = await Promise.all([
+    programacionRepository.findByDia(diaActual),
+    reservasSemestralesRepository.findByDia(diaActual, new Date()),
+    reservaRepository.findPendientesNFCByDocumentoYFecha(documento, fecha),
+  ]);
+
+  // Las clases "NO REQUIERE AULA" no tienen llave física asociada — ver nota
+  // en `resolverContextoNFC` (evita que `encontrarClaseActual` prefiera un
+  // bloque sin aula real sobre la clase física del docente).
+  const clasesProgramacion = (todasClases || []).filter(
+    (clase) => normalizarDocumento(clase.numero_documento) === documento
+      && normalizeAula(clase.aula) !== 'NO REQUIERE AULA'
+  );
+
+  const clasesSemestrales = (reservasSemestralesHoy || [])
+    .filter((r) => normalizarDocumento(r.numero_documento) === documento)
+    .map(reservaSemestralToClase);
+
+  const clasesIndividuales = (reservasIndividualesHoy || []).map(reservaIndividualToClase);
+
+  return [...clasesProgramacion, ...clasesSemestrales, ...clasesIndividuales];
+}
+
+/**
  * Busca una persona de la comunidad por su ID de carnet NFC, o por número de
  * documento si no hay match de carnet (el modal de entrega acepta escribir
  * el documento manualmente cuando no se tiene el carnet a mano).
@@ -69,29 +131,21 @@ async function resolverContextoNFC(persona, documento) {
   }
 
   const diaActual = getDiaActual();
-  const [todasClases, registrosHoy, reservasSemestralesHoy] = await Promise.all([
-    programacionRepository.findByDia(diaActual),
-    llaveRepository.findByFecha(getFechaHoy()),
-    reservasSemestralesRepository.findByDia(diaActual, new Date()),
+  const fechaHoy = getFechaHoy();
+  const [franjasDelDia, registrosHoy] = await Promise.all([
+    obtenerFranjasDelDiaDocente(documento, diaActual, fechaHoy),
+    llaveRepository.findByFecha(fechaHoy),
   ]);
 
-  const clasesDocente = (todasClases || []).filter(
-    (clase) => normalizarDocumento(clase.numero_documento) === documento
-  );
-
-  const reservasDocente = (reservasSemestralesHoy || []).filter(
-    (r) => normalizarDocumento(r.numero_documento) === documento
-  );
-
-  if (clasesDocente.length || reservasDocente.length) {
-    return resolverContextoDocente({ persona, documento, clasesDocente, reservasDocente, registrosHoy });
+  if (franjasDelDia.length) {
+    return resolverContextoDocente({ persona, documento, franjasDelDia, registrosHoy });
   }
 
   return resolverContextoMonitor({ persona, documento, registrosHoy });
 }
 
-/** Resuelve contexto cuando la persona es un docente con clases programadas o reservas semestrales. */
-async function resolverContextoDocente({ persona, documento, clasesDocente, reservasDocente = [], registrosHoy }) {
+/** Resuelve contexto cuando la persona es un docente con clases/reservas de hoy (programación, semestral o individual). */
+async function resolverContextoDocente({ persona, documento, franjasDelDia = [], registrosHoy }) {
   const prestamosActivos = await llaveRepository.findPendientesByDocumento(documento);
   if (prestamosActivos.length === 1) {
     return { rol: 'docente', docente: persona, prestamoActivo: prestamosActivos[0], prestamosActivos, clasesDisponibles: [] };
@@ -104,17 +158,14 @@ async function resolverContextoDocente({ persona, documento, clasesDocente, rese
     .filter((registro) => normalizarDocumento(registro.numero_documento) === documento)
     .map((registro) => String(registro.horario || '').trim());
 
-  const clasesProgramacion = agruparClasesConsecutivas(
-    (clasesDocente || []).filter(
+  // Unificar programación+RS+RI en un solo pase de agrupación permite que
+  // `agruparClasesConsecutivas` fusione bloques consecutivos del mismo
+  // docente+aula sin importar de qué sistema vino cada clase.
+  const clasesDisponibles = agruparClasesConsecutivas(
+    franjasDelDia.filter(
       (clase) => !horarioCubiertoPorPrestamo(String(clase.horario || '').trim(), horariosProcesados)
     )
   );
-
-  const clasesReservas = (reservasDocente || [])
-    .map(reservaSemestralToClase)
-    .filter((r) => !horarioCubiertoPorPrestamo(String(r.horario || '').trim(), horariosProcesados));
-
-  const clasesDisponibles = [...clasesProgramacion, ...clasesReservas];
 
   if (!clasesDisponibles.length) {
     return {
@@ -262,24 +313,13 @@ async function buscarClaseParaConfirmacion({ persona, aula, horario, rol }) {
       docenteDoc = normalizarDocumento(clase.numero_documento);
     }
   } else {
-    const clases = await programacionRepository.findByDia(diaActual);
-    const clasesEnAula = (clases || []).filter(
-      (item) => normalizarDocumento(item.numero_documento) === documento
-        && normalizeAula(item.aula) === aulaNormalizada
-    );
+    // Unifica programación+RS+RI (mismo criterio que `resolverContextoDocente`)
+    // para que una clase consecutiva con una reserva del mismo docente+aula
+    // también se resuelva como bloque fusionado acá.
+    const franjasDelDia = await obtenerFranjasDelDiaDocente(documento, diaActual, getFechaHoy());
+    const clasesEnAula = franjasDelDia.filter((item) => normalizeAula(item.aula) === aulaNormalizada);
     const agrupadas = agruparClasesConsecutivas(clasesEnAula);
     clase = agrupadas.find((item) => normalizeHorario(item.horario) === horarioNormalizado);
-
-    // Buscar en reservas semestrales si no se encontró en programación
-    if (!clase) {
-      const reservasHoy = await reservasSemestralesRepository.findByDia(diaActual, new Date());
-      const reserva = (reservasHoy || []).find(
-        (r) => normalizarDocumento(r.numero_documento) === docenteDoc
-          && normalizeAula(r.aula) === aulaNormalizada
-          && normalizeHorario(r.horario) === horarioNormalizado
-      );
-      if (reserva) clase = reservaSemestralToClase(reserva);
-    }
   }
 
   return { clase, docenteDoc };

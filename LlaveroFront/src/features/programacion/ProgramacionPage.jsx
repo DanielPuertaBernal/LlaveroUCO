@@ -18,7 +18,7 @@ import {
   useEliminarReservaIndividual,
   programacionApi,
 } from './programacionApi';
-import { useEntregarLlave } from '@/features/llaves/llavesApi';
+import { useEntregarLlave, useClasesProcesadasHoy } from '@/features/llaves/llavesApi';
 import { useMisBloques } from '@/features/porteros/porterosApi';
 import { useSalones } from '@/features/salones/salonesApi';
 import { abrirBuscadorPersonaPorNombre } from '@/shared/utils/personaSearchHotkey';
@@ -118,6 +118,20 @@ function VistaSemestre({ semestre, onVolver, isAdmin }) {
   const eliminarReservaIndividual = useEliminarReservaIndividual(semestre.codigo);
 
   const entregarLlave = useEntregarLlave();
+  const { data: clasesProcesadasHoy = [] } = useClasesProcesadasHoy();
+
+  // Un docente ya puede tener llave hoy para esta aula (aunque ya la haya
+  // devuelto) — el backend rechaza una segunda entrega para el mismo par
+  // docente+aula en el día (índice único), así que se oculta el botón antes
+  // de que el usuario se tope con ese error.
+  const clavesConLlaveHoy = new Set(
+    clasesProcesadasHoy.map((c) => `${c.documento}|${c.aula}`)
+  );
+  function yaTieneLlaveHoy(row) {
+    const documento = String(row.numero_documento || '').trim();
+    const aula = String(row.aula || '').trim().toUpperCase();
+    return clavesConLlaveHoy.has(`${documento}|${aula}`);
+  }
 
   // La vista "por día" es operativa (entrega de llaves) — las clases sin aula
   // física no aportan nada ahí y solo generan ruido; se conservan en "completa".
@@ -150,9 +164,19 @@ function VistaSemestre({ semestre, onVolver, isAdmin }) {
     });
   }
 
-  const registros = filtrarPorBloquePorteria(registrosSinFiltrarPorBloque);
-  const reservasFiltradas = filtrarPorBloquePorteria(reservasSinFiltrarPorBloque);
-  const reservasSemestralesDelDia = filtrarPorBloquePorteria(reservasSemestralesDelDiaSinFiltrar);
+  // Ordena por hora de inicio (menor a mayor); usa `hora_inicio` si está
+  // disponible, o el primer tramo de `horario` ("HH:MM A HH:MM") si no.
+  function ordenarPorHoraInicio(rows) {
+    return [...rows].sort((a, b) => {
+      const horaA = a.hora_inicio || String(a.horario || '').split(' A ')[0] || '';
+      const horaB = b.hora_inicio || String(b.horario || '').split(' A ')[0] || '';
+      return horaA.localeCompare(horaB);
+    });
+  }
+
+  const registros = ordenarPorHoraInicio(filtrarPorBloquePorteria(registrosSinFiltrarPorBloque));
+  const reservasFiltradas = ordenarPorHoraInicio(filtrarPorBloquePorteria(reservasSinFiltrarPorBloque));
+  const reservasSemestralesDelDia = ordenarPorHoraInicio(filtrarPorBloquePorteria(reservasSemestralesDelDiaSinFiltrar));
 
   async function handleEntregarDesdeTabla(clase) {
     // Paso 1: ¿quién recibe?
@@ -446,6 +470,9 @@ function VistaSemestre({ semestre, onVolver, isAdmin }) {
               label: 'Llave',
               render: (_v, row) => {
                 if (String(row.aula || '').trim().toUpperCase() === 'NO REQUIERE AULA') return null;
+                if (yaTieneLlaveHoy(row)) {
+                  return <span className="text-xs text-muted-foreground">Ya entregada hoy</span>;
+                }
                 return (
                   <Button variant="outline" size="sm" onClick={() => handleEntregarDesdeTabla(row)} disabled={entregarLlave.isPending}>
                     <Key className="h-3.5 w-3.5 mr-1" />Entregar

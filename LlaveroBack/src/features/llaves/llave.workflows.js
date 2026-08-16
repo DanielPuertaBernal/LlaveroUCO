@@ -17,7 +17,7 @@ const {
   construirResultadoAnticipado,
   construirResultadoPrestamo,
   construirResultadoDevolucion,
-  construirRegistroEntregaManual,
+  construirRegistrosEntregaManual,
 } = require('./llave.domain');
 
 /**
@@ -89,6 +89,19 @@ function createLlaveWorkflows({
     return 'nfc_en_tiempo';
   }
 
+  /**
+   * Marca como reclamadas todas las reservas individuales (modo de reclamo
+   * diferido) que hayan quedado encadenadas dentro de un préstamo — ver
+   * `persistirPrestamo` (llave.write-model.js), que ya identifica cuáles de
+   * los registros creados vienen de una reserva individual.
+   */
+  async function vincularReservasIndividuales(vinculos, { anticipado = false, tiempoRetraso = null } = {}) {
+    const checkinEstado = resolverEstadoCheckinReserva({ anticipado, tiempoRetraso });
+    for (const { reservaId, registroLlaveId } of vinculos) {
+      await marcarReservaCheckinNFC({ reservaId, llavePrestamoId: registroLlaveId, checkinEstado, now: new Date() });
+    }
+  }
+
   /** Procesa la devolución de una llave a partir del contexto NFC. */
   async function resolverResultadoDevolucion({ contexto, persona, documento, ubicacion, user }) {
     try {
@@ -157,7 +170,7 @@ function createLlaveWorkflows({
 
       await verificarPermiso(user, { salonNombre: claseReserva.aula }, OPERACIONES_UBICACION.PRESTAMO_LLAVES);
 
-      const registro = await persistirPrestamo({
+      const { registro } = await persistirPrestamo({
         docente: {
           numero_documento: reservaPendiente.solicitante_documento,
           nombre: reservaPendiente.solicitante_nombre,
@@ -207,7 +220,7 @@ function createLlaveWorkflows({
 
     await verificarPermiso(user, { salonNombre: claseTarget.aula }, OPERACIONES_UBICACION.PRESTAMO_LLAVES);
 
-    const registro = await persistirPrestamo({
+    const { registro, vinculosReservaIndividual } = await persistirPrestamo({
       docente: contexto.docente,
       clase: claseTarget,
       seReclamoATiempo,
@@ -219,9 +232,13 @@ function createLlaveWorkflows({
       },
       tipoEntrega: 'carnet',
       ubicacionPrestamo,
-      origenRegistro: claseTarget._origen === 'reserva_semestral' ? 'reserva_semestral' : 'programacion',
+      origenRegistro: ['reserva_semestral', 'individual'].includes(claseTarget._origen) ? claseTarget._origen : 'programacion',
       gestionadoPorUsuarioId: user?.sub || null,
     });
+
+    if (vinculosReservaIndividual.length) {
+      await vincularReservasIndividuales(vinculosReservaIndividual, { anticipado: false, tiempoRetraso });
+    }
 
     return construirResultadoPrestamo({
       contexto,
@@ -325,7 +342,7 @@ function createLlaveWorkflows({
     await verificarPermiso(user, { salonNombre: clase.aula }, OPERACIONES_UBICACION.PRESTAMO_LLAVES);
 
     const docente = await findDocenteByDocumento(docenteDoc);
-    const registro = await persistirPrestamo({
+    const { registro, vinculosReservaIndividual } = await persistirPrestamo({
       docente: docente || persona,
       clase,
       seReclamoATiempo: true,
@@ -348,6 +365,8 @@ function createLlaveWorkflows({
         checkinEstado: 'nfc_anticipado',
         now: new Date(),
       });
+    } else if (vinculosReservaIndividual.length) {
+      await vincularReservasIndividuales(vinculosReservaIndividual, { anticipado: true });
     }
 
     return {
@@ -366,29 +385,59 @@ function createLlaveWorkflows({
     await verificarPermiso(user, { salonNombre: infoClase.aula }, OPERACIONES_UBICACION.PRESTAMO_LLAVES);
 
     const documento = normalizarDocumento(infoClase.nroidenti);
+    const horarioClicado = (infoClase?.hora_inicio && infoClase?.hora_fin)
+      ? `${infoClase.hora_inicio} A ${infoClase.hora_fin}`
+      : '';
 
-    const registro = construirRegistroEntregaManual({
+    // Si la clase en la que se hizo clic forma parte de un bloque de clases
+    // consecutivas del mismo docente+aula, se encadenan todas aunque el
+    // auxiliar solo haya confirmado una — mismo criterio que el flujo NFC
+    // (`buscarClaseParaConfirmacion` ya resuelve y agrupa por aula+horario).
+    let grupoClase = null;
+    if (horarioClicado) {
+      const { clase } = await buscarClaseParaConfirmacion({
+        persona: { numero_documento: documento },
+        aula: infoClase.aula,
+        horario: horarioClicado,
+        rol: 'docente',
+      });
+      grupoClase = clase;
+    }
+
+    const registros = construirRegistrosEntregaManual({
       infoClase,
       documento,
       ubicacionPrestamo,
       origenRegistro,
       gestionadoPorUsuarioId: user?.sub || null,
+      grupoClase,
     });
 
     // Fecha del día sin hora para el índice único de prevención de duplicados
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
-    registro.dia_entrega = hoy;
 
     let created;
+    const vinculosReservaIndividual = [];
     try {
-      created = await createRegistro(registro);
+      for (const registro of registros) {
+        registro.dia_entrega = hoy;
+        const origenClase = registro._origenClase;
+        created = await createRegistro(registro);
+        if (origenClase?._origen === 'individual' && origenClase?.id) {
+          vinculosReservaIndividual.push({ reservaId: origenClase.id, registroLlaveId: created.id });
+        }
+      }
     } catch (err) {
-      // Postgres unique_violation (dedupe: comunidad_id + salon_id + dia_entrega)
+      // Postgres unique_violation (dedupe: comunidad_id + salon_id + dia_entrega + horario)
       if (err.code === '23505') {
         throw ApiError.conflict('La llave de este salón ya está en préstamo hoy');
       }
       throw err;
+    }
+
+    if (vinculosReservaIndividual.length) {
+      await vincularReservasIndividuales(vinculosReservaIndividual, { anticipado: false });
     }
 
     return {

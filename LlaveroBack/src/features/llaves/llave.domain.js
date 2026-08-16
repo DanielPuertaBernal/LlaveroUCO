@@ -61,7 +61,7 @@ function agruparClasesConsecutivas(clases = []) {
 
   for (const bloques of grupos.values()) {
     if (bloques.length === 1) {
-      resultado.push(bloques[0]);
+      resultado.push({ ...bloques[0], _clasesOriginales: [bloques[0]] });
       continue;
     }
 
@@ -73,6 +73,7 @@ function agruparClasesConsecutivas(clases = []) {
 
     let actual = { ...bloques[0] };
     let materias = [actual.materia || ''];
+    let originales = [bloques[0]];
 
     for (let i = 1; i < bloques.length; i += 1) {
       const siguiente = bloques[i];
@@ -87,19 +88,102 @@ function agruparClasesConsecutivas(clases = []) {
         actual.horario = `${horaInicio} A ${horaFin}`;
         actual.hora_fin = horaFin;
         materias.push(siguiente.materia || '');
+        originales.push(siguiente);
       } else {
         actual.materia = [...new Set(materias.filter(Boolean))].join(', ');
+        actual._clasesOriginales = originales;
         resultado.push(actual);
         actual = { ...siguiente };
         materias = [siguiente.materia || ''];
+        originales = [siguiente];
       }
     }
 
     actual.materia = [...new Set(materias.filter(Boolean))].join(', ');
+    actual._clasesOriginales = originales;
     resultado.push(actual);
   }
 
   return resultado;
+}
+
+/**
+ * Igual que `construirRegistroPrestamo`, pero cuando la clase viene de un
+ * grupo de clases consecutivas fusionadas (`clase._clasesOriginales` con más
+ * de un elemento — ver `agruparClasesConsecutivas`), genera UN registro por
+ * clase original en vez de uno solo con horario combinado, para que el
+ * historial refleje cada materia por separado aunque el docente solo haya
+ * escaneado el carnet una vez. Los registros se encadenan automáticamente:
+ * cada uno salvo el último se cierra (`fecha_hora_devolucion`) en el límite
+ * de su propia clase, y el siguiente se abre en ese mismo instante — solo el
+ * último queda `en_prestamo` de verdad, a la espera de la devolución física.
+ * @param {object} params - mismos params que `construirRegistroPrestamo`
+ * @returns {object[]} uno o más registros a persistir, en orden cronológico
+ */
+function construirRegistrosPrestamo(params) {
+  const { clase, ahora = new Date() } = params;
+  const todas = clase?._clasesOriginales?.length ? clase._clasesOriginales : [clase];
+
+  if (todas.length === 1) {
+    const registro = construirRegistroPrestamo(params);
+    registro._origenClase = todas[0];
+    return [registro];
+  }
+
+  const fechaBase = ahora.toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+
+  function limiteDeClase(claseOriginal) {
+    const horaFin = normalizeHorario(claseOriginal?.horario).split(' A ')[1]?.trim() || claseOriginal?.hora_fin;
+    if (!horaFin) return null;
+    const [h, m] = String(horaFin).split(':').map(Number);
+    if (Number.isNaN(h) || Number.isNaN(m)) return null;
+    return new Date(`${fechaBase}T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00-05:00`);
+  }
+
+  // Si la entrega (física o manual) ocurre tarde — durante una clase
+  // posterior del mismo bloque — no se fabrican registros retroactivos para
+  // las clases que ya terminaron sin que el docente reclamara la llave;
+  // la cadena arranca en la primera clase que aún no ha terminado.
+  const originales = todas.filter((c) => {
+    const limite = limiteDeClase(c);
+    return !limite || limite > ahora;
+  });
+  if (!originales.length) originales.push(todas[todas.length - 1]);
+
+  if (originales.length === 1) {
+    const registro = construirRegistroPrestamo({ ...params, clase: originales[0] });
+    registro._origenClase = originales[0];
+    return [registro];
+  }
+
+  let entregaActual = ahora;
+
+  return originales.map((claseOriginal, i) => {
+    const esUltima = i === originales.length - 1;
+    const registro = construirRegistroPrestamo({ ...params, clase: claseOriginal });
+    registro._origenClase = claseOriginal;
+    registro.fecha_hora_entrega = entregaActual;
+
+    if (!esUltima) {
+      const limite = limiteDeClase(claseOriginal);
+      registro.fecha_hora_devolucion = limite;
+      registro.duracion_minutos = limite ? calcularDuracionMinutos(entregaActual, limite) : null;
+      registro.estado = 'entregado';
+      registro.tipo_devolucion = 'automatica';
+      entregaActual = limite || entregaActual;
+    }
+
+    if (i > 0) {
+      // Solo la primera clase refleja el retraso/anticipación real del
+      // reclamo del docente; las siguientes son continuaciones automáticas
+      // del mismo préstamo físico, no un nuevo reclamo.
+      registro.se_reclamo_a_tiempo = true;
+      registro.tiempo_retraso_minutos = null;
+      registro.retraso_entrega = false;
+    }
+
+    return registro;
+  });
 }
 
 /** Encuentra la clase más cercana al horario actual que aún no ha terminado. */
@@ -132,6 +216,7 @@ function construirClasesProcesadas(registros = []) {
   return registros.map((registro) => ({
     documento: normalizarDocumento(registro?.numero_documento),
     horario: normalizeString(registro?.horario),
+    aula: normalizeAula(registro?.aula),
   }));
 }
 
@@ -237,7 +322,11 @@ function construirRegistroPrestamo({
     aula: clase?.aula || '',
     facultad: clase?.facultad || 'No especificada',
     materia: clase?.materia || '',
-    programacion_id: programacionId ?? clase?.id ?? null,
+    // `clase?.id` solo es un id real de `programaciones` cuando la clase
+    // viene de programación/reserva semestral — una reserva individual usa
+    // el id de su propia tabla (`reservas`), que rompería el FK si se
+    // guardara acá.
+    programacion_id: programacionId ?? (clase?._origen === 'individual' ? null : clase?.id ?? null),
     fecha_hora_entrega: new Date(),
     fecha_hora_devolucion: null,
     duracion_minutos: null,
@@ -261,13 +350,25 @@ function construirRegistroPrestamo({
   };
 }
 
-/** Construye registro de entrega manual con cálculo automático de retraso. */
-function construirRegistroEntregaManual({
+/**
+ * Adaptador de entrega manual: recalcula horario/retraso desde `infoClase`
+ * (igual que la versión anterior de un solo registro), pero delega el
+ * armado de la(s) fila(s) a `construirRegistrosPrestamo` — así, si la clase
+ * en la que se hizo clic forma parte de un bloque de clases consecutivas del
+ * mismo docente+aula (`grupoClase._clasesOriginales`, resuelto por
+ * `buscarClaseParaConfirmacion` antes de llamar acá), la entrega manual
+ * encadena automáticamente el resto de la sesión igual que el flujo NFC, sin
+ * que el auxiliar tenga que repetir "Entregar" por cada clase.
+ * @param {object} params
+ * @param {object|null} [params.grupoClase] - clase agrupada (con `_clasesOriginales`) si `infoClase` es parte de un bloque consecutivo
+ */
+function construirRegistrosEntregaManual({
   infoClase,
   documento,
   ubicacionPrestamo,
   origenRegistro,
   gestionadoPorUsuarioId = null,
+  grupoClase = null,
 }) {
   const ahora = new Date();
   const horario = (infoClase?.hora_inicio && infoClase?.hora_fin)
@@ -278,36 +379,41 @@ function construirRegistroEntregaManual({
   const diaRegistro = infoClase?.dia
     || ahora.toLocaleDateString('es-CO', { weekday: 'long' }).replace(/^./, (char) => char.toUpperCase());
 
-  return {
-    numero_documento: documento,
-    docente: infoClase?.profesor || '',
+  const clase = {
+    id: infoClase?.programacion_id || null,
     dia: diaRegistro || getDiaActual(),
     horario,
     aula: infoClase?.aula || '',
     facultad: infoClase?.facultad || 'No especificada',
     materia: infoClase?.motivo || '',
-    programacion_id: infoClase?.programacion_id || null,
-    fecha_hora_entrega: ahora,
-    fecha_hora_devolucion: null,
-    duracion_minutos: null,
-    se_reclamo_a_tiempo: seReclamoATiempo,
-    tiempo_retraso_minutos: tiempoRetrasoMinutos,
-    retraso_entrega: !seReclamoATiempo,
-    tiempo_retraso_devolucion_minutos: null,
-    tipo_entrega: 'manual',
-    tipo_devolucion: '',
-    origen_registro: origenRegistro,
-    ubicacion_prestamo: ubicacionPrestamo,
-    ubicacion_devolucion: '',
-    quien_reclama: infoClase?.quien_reclama || 'docente',
-    numero_documento_reclama: infoClase?.numero_documento_reclama || documento,
-    nombre_reclama: infoClase?.nombre_reclama || infoClase?.profesor || '',
-    quien_entrega: '',
-    numero_documento_entrega: '',
-    nombre_entrega: '',
-    estado: 'en_prestamo',
-    gestionado_por_usuario_id: gestionadoPorUsuarioId,
+    _clasesOriginales: grupoClase?._clasesOriginales,
   };
+  const docente = { numero_documento: documento, nombre: infoClase?.profesor || '' };
+  const reclamaInfo = {
+    quien: infoClase?.quien_reclama || 'docente',
+    documento: infoClase?.numero_documento_reclama || documento,
+    nombre: infoClase?.nombre_reclama || infoClase?.profesor || '',
+  };
+
+  const registros = construirRegistrosPrestamo({
+    docente,
+    clase,
+    seReclamoATiempo,
+    tiempoRetraso: tiempoRetrasoMinutos,
+    reclamaInfo,
+    tipoEntrega: 'manual',
+    ubicacionPrestamo,
+    origenRegistro,
+    gestionadoPorUsuarioId,
+    ahora,
+  });
+
+  // `construirRegistroPrestamo` no marca `retraso_entrega` (ese cálculo vive
+  // fuera, en el flujo NFC) — la entrega manual sí lo calculaba ella misma;
+  // se preserva ese comportamiento en el primer registro de la cadena.
+  registros[0].retraso_entrega = !seReclamoATiempo;
+
+  return registros;
 }
 
 /** Construye los datos de actualización para una devolución (duración, retraso, estado). */
@@ -419,7 +525,8 @@ module.exports = {
   construirResultadoPrestamo,
   construirResultadoDevolucion,
   construirRegistroPrestamo,
-  construirRegistroEntregaManual,
+  construirRegistrosPrestamo,
+  construirRegistrosEntregaManual,
   construirDatosDevolucion,
   calcularEstadoVisual,
   toClientFormat,

@@ -248,6 +248,27 @@ class ReservaRepository {
   }
 
   /**
+   * Todas las reservas individuales de HOY para un docente en modo de
+   * reclamo diferido (`entregar_llave: false`, aún sin reclamar) —
+   * a diferencia de `findReservaPendienteNFCByDocumento` (que elige solo la
+   * "mejor" para el momento actual), esta trae todas para poder fusionarlas
+   * con clases/reservas semestrales antes de agrupar bloques consecutivos
+   * (ver `llave.context.js#obtenerFranjasDelDiaDocente`).
+   * @param {string} documento @param {string} fecha - YYYY-MM-DD
+   * @returns {Promise<object[]>}
+   */
+  async findPendientesNFCByDocumentoYFecha(documento, fecha) {
+    return this._readQuery()
+      .where('c_sol.numero_documento', String(documento))
+      .andWhere(`${TABLES.RESERVAS}.fecha`, fecha)
+      .whereIn(`${TABLES.RESERVAS}.estado`, ['pendiente', 'aprobada'])
+      .andWhere(`${TABLES.RESERVAS}.entregar_llave`, false)
+      .andWhere(`${TABLES.RESERVAS}.llave_entregada`, false)
+      .andWhere(`${TABLES.RESERVAS}.checkin_estado`, 'pendiente_nfc')
+      .orderBy(`${TABLES.RESERVAS}.hora_inicio`, 'asc');
+  }
+
+  /**
    * Reservas activas (no canceladas/rechazadas) dentro de un rango de
    * fechas cuyo `fecha` cae en un día de la semana dado (0=domingo..6=sábado,
    * convención JS `Date#getDay()`). Usado por
