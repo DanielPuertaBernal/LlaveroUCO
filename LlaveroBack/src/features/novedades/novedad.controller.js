@@ -6,8 +6,11 @@ class NovedadController {
   async registrar(req, res) {
     const datos = {
       ...req.body,
-      reportado_por: req.body.reportado_por || req.user?.documento || '',
-      reportado_por_nombre: req.body.reportado_por_nombre || req.user?.nombre || '',
+      // La autoría se deriva SIEMPRE de la sesión autenticada — nunca del
+      // body, que un cliente podría manipular para atribuir la novedad a
+      // otra persona.
+      reportado_por: req.user?.documento || '',
+      reportado_por_nombre: req.user?.nombre || '',
     };
     const novedad = await novedadService.registrar(datos);
     return res.status(201).json({ ok: true, data: novedad });

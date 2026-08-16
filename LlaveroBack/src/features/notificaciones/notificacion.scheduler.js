@@ -7,6 +7,7 @@ const { createLogger } = require('../../shared/utils/logger');
 const logger = createLogger('NotificacionScheduler');
 
 let tareaActiva = null;
+let cicloEnCurso = false;
 
 function iniciar() {
   if (tareaActiva) {
@@ -16,6 +17,14 @@ function iniciar() {
 
   // Ejecutar cada 5 minutos
   tareaActiva = cron.schedule('*/5 * * * *', async () => {
+    // Guarda contra solapamiento: si un ciclo tarda más que el intervalo
+    // (muchos préstamos pendientes, proveedor de correo lento), el siguiente
+    // tick se salta en vez de correr concurrentemente y duplicar envíos.
+    if (cicloEnCurso) {
+      logger.warn('Ciclo anterior de notificaciones aún en curso, se omite este tick');
+      return;
+    }
+    cicloEnCurso = true;
     try {
       logger.info('Iniciando ciclo de notificaciones automáticas');
       await reservaService.sincronizarEstadosVencidos();
@@ -24,6 +33,8 @@ function iniciar() {
       logger.info('Ciclo de notificaciones completado', { encolados, enviados });
     } catch (err) {
       logger.error('Error en ciclo de notificaciones', { error: err.message });
+    } finally {
+      cicloEnCurso = false;
     }
   });
 

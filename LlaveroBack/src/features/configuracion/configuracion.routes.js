@@ -2,7 +2,11 @@
 const { Router } = require('express');
 const { z } = require('zod');
 const configuracionController = require('./configuracion.controller');
-const { requireAdmin, requireAuth } = require('../auth/auth.middleware');
+const { requireAdmin, verifyToken, requireRole, ROLES } = require('../auth/auth.middleware');
+
+// Lectura de configuración: admin y auxiliar la necesitan para operar
+// (límites de préstamo, recordatorios), pero NO portería.
+const requireAdminOAux = [verifyToken, requireRole(ROLES.ADMIN, ROLES.AUX)];
 const { validate } = require('../../shared/middlewares/validate.middleware');
 
 const router = Router();
@@ -42,7 +46,7 @@ const guardarSchema = z.object({
  *       401:
  *         $ref: '#/components/responses/NoAutenticado'
  */
-router.get('/', ...requireAuth, (req, res) => configuracionController.listar(req, res));
+router.get('/', ...requireAdminOAux, (req, res) => configuracionController.listar(req, res));
 
 /**
  * @openapi
@@ -70,7 +74,7 @@ router.get('/', ...requireAuth, (req, res) => configuracionController.listar(req
  *       401:
  *         $ref: '#/components/responses/NoAutenticado'
  */
-router.get('/defaults', ...requireAuth, (req, res) => configuracionController.defaults(req, res));
+router.get('/defaults', ...requireAdminOAux, (req, res) => configuracionController.defaults(req, res));
 
 router.put('/defaults', ...requireAdmin, validate(guardarSchema), (req, res) =>
   configuracionController.guardarDefaults(req, res)
@@ -111,7 +115,7 @@ router.put('/defaults', ...requireAdmin, validate(guardarSchema), (req, res) =>
  *       404:
  *         $ref: '#/components/responses/NoEncontrado'
  */
-router.get('/:bloque', ...requireAuth, (req, res) => configuracionController.obtener(req, res));
+router.get('/:bloque', ...requireAdminOAux, (req, res) => configuracionController.obtener(req, res));
 
 /**
  * @openapi

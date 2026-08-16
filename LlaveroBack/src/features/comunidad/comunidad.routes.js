@@ -125,7 +125,7 @@ router.get('/:documento', ...requireAuth, (req, res) => comunidadController.obte
  *     security:
  *       - BearerAuth: []
  */
-router.post('/', ...requireAuth, (req, res) => comunidadController.crear(req, res));
+router.post('/', ...requireAdmin, (req, res) => comunidadController.crear(req, res));
 
 /**
  * @openapi
