@@ -11,17 +11,16 @@ export default function ProtectedRoute({ roles }) {
     isAuthenticated,
     usuario,
     token,
-    refreshToken,
     isHydrating,
     hasHydrated,
     restoreSession,
   } = useAuthStore();
 
   useEffect(() => {
-    if (hasHydrated && !token && refreshToken) {
+    if (hasHydrated && !token) {
       restoreSession();
     }
-  }, [hasHydrated, token, refreshToken, restoreSession]);
+  }, [hasHydrated, token, restoreSession]);
 
   if (!hasHydrated || isHydrating) {
     return (

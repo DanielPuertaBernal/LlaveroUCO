@@ -26,11 +26,10 @@ export default function AuthCallbackPage() {
     hasRun.current = true;
 
     const params = new URLSearchParams(window.location.search);
-    const token = params.get('token');
-    const refreshToken = params.get('refreshToken');
     const errorCode = params.get('error');
 
-    // Limpia los query params del historial para no dejar el token expuesto/reutilizable
+    // Limpia los query params del historial (ya no viajan tokens en la URL,
+    // pero se conserva la limpieza por si queda algún `error` residual)
     window.history.replaceState({}, '', window.location.pathname);
 
     if (errorCode) {
@@ -38,16 +37,21 @@ export default function AuthCallbackPage() {
       return;
     }
 
-    if (!token || !refreshToken) {
-      setError(getErrorMessage());
-      return;
-    }
-
+    // El backend ya dejó el refresh token en una cookie httpOnly durante el
+    // redirect. Aquí solo se pide el access token de corta duración
+    // llamando a `/auth/refresh` (que lee esa cookie automáticamente) y
+    // luego los datos del usuario.
     (async () => {
       try {
-        login({ token, refreshToken, usuario: null });
+        const refreshRes = await authApi.refresh();
+        const token = refreshRes.data?.data?.token;
+        if (!token) {
+          throw new Error('No se pudo obtener el token de acceso');
+        }
+
+        login({ token, usuario: null });
         const res = await authApi.me();
-        login({ token, refreshToken, usuario: res.data.data.usuario });
+        login({ token, usuario: res.data.data.usuario });
         navigate('/programacion', { replace: true });
       } catch (_err) {
         setError('No se pudo obtener la información del usuario autenticado. Intenta de nuevo.');

@@ -6,6 +6,9 @@ const BASE = import.meta.env.VITE_API_URL ?? '';
 const apiClient = axios.create({
   baseURL: `${BASE}/api`,
   timeout: 15000,
+  // Necesario para que el navegador envíe/reciba la cookie httpOnly
+  // `refreshToken` en requests cross-origin al backend.
+  withCredentials: true,
 });
 
 let refreshPromise = null;
@@ -25,21 +28,26 @@ apiClient.interceptors.response.use(
     const isAuthRoute = originalRequest.url?.startsWith('/auth/');
 
     if (error.response?.status === 401 && !isAuthRoute) {
-      const { refreshToken, usuario, login, logout } = useAuthStore.getState();
+      const { usuario, login, logout } = useAuthStore.getState();
 
-      if (refreshToken && !originalRequest._retry) {
+      if (!originalRequest._retry) {
         originalRequest._retry = true;
 
         try {
-          refreshPromise = refreshPromise || axios.post(`${BASE}/api/auth/refresh`, { refreshToken }, { timeout: 15000 });
+          // El refresh token viaja solo en la cookie httpOnly; el navegador
+          // la envía automáticamente gracias a `withCredentials: true`, no
+          // hay ningún valor que leer/mandar manualmente aquí.
+          refreshPromise = refreshPromise || axios.post(`${BASE}/api/auth/refresh`, null, {
+            timeout: 15000,
+            withCredentials: true,
+          });
           const response = await refreshPromise;
           refreshPromise = null;
 
           const nextToken = response.data?.data?.token;
-          const nextRefreshToken = response.data?.data?.refreshToken || refreshToken;
 
           if (nextToken) {
-            login({ token: nextToken, refreshToken: nextRefreshToken, usuario });
+            login({ token: nextToken, usuario });
             originalRequest.headers = originalRequest.headers || {};
             originalRequest.headers.Authorization = `Bearer ${nextToken}`;
             return apiClient(originalRequest);

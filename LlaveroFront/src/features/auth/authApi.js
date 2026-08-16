@@ -1,7 +1,9 @@
 import apiClient from '@/shared/api/axios.client';
 
 export const authApi = {
-  logout: (refreshToken = '') => apiClient.post('/auth/logout', { refreshToken }),
+  // El refresh token viaja como cookie httpOnly; el backend la lee/limpia
+  // directamente, no hace falta enviar nada en el body.
+  logout: () => apiClient.post('/auth/logout'),
   me: () => apiClient.get('/auth/me'),
-  refresh: (refreshToken) => apiClient.post('/auth/refresh', { refreshToken }),
+  refresh: () => apiClient.post('/auth/refresh'),
 };

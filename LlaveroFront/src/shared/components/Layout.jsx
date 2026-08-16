@@ -6,14 +6,14 @@ import Sidebar from '@/shared/components/Sidebar';
 import TopBar from '@/shared/components/TopBar';
 
 export default function Layout() {
-  const { usuario, refreshToken, logout } = useAuthStore();
+  const { usuario, logout } = useAuthStore();
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   async function handleLogout() {
     try {
-      await authApi.logout(refreshToken);
+      await authApi.logout();
     } catch (_) {
       // Si el backend no responde, igual limpiamos la sesión local.
     } finally {

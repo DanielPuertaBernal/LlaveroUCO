@@ -21,14 +21,14 @@ const API_BASE_URL = import.meta.env.VITE_API_URL ?? '';
 export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { isAuthenticated, isHydrating, hasHydrated, token, refreshToken, restoreSession } = useAuthStore();
+  const { isAuthenticated, isHydrating, hasHydrated, token, restoreSession } = useAuthStore();
   const { theme, setTheme } = useTheme();
 
   useEffect(() => {
-    if (hasHydrated && !token && refreshToken) {
+    if (hasHydrated && !token) {
       restoreSession();
     }
-  }, [hasHydrated, token, refreshToken, restoreSession]);
+  }, [hasHydrated, token, restoreSession]);
 
   useEffect(() => {
     if (isAuthenticated && !isHydrating) {
@@ -47,7 +47,7 @@ export default function LoginPage() {
     window.location.href = `${API_BASE_URL}/api/auth/office365/login?email=${encodeURIComponent(email)}`;
   }
 
-  if (!hasHydrated || (isHydrating && refreshToken)) {
+  if (!hasHydrated || isHydrating) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-muted/40">
         <div className="flex flex-col items-center gap-3">

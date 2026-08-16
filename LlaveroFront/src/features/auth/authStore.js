@@ -1,13 +1,20 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-async function restoreAuthSession(refreshToken) {
+/**
+ * Restaura la sesión usando la cookie httpOnly `refreshToken` que el
+ * navegador ya envía automáticamente (con `credentials: 'include'`). No hay
+ * ningún refresh token que leer o enviar manualmente desde JS — vive solo en
+ * la cookie, invisible para el frontend. Usa `fetch` directo (en vez de
+ * `apiClient`) a propósito, para no crear un import circular con
+ * `axios.client.js` (que a su vez importa este store).
+ */
+async function restoreAuthSession() {
   const BASE = import.meta.env.VITE_API_URL ?? '';
 
   const refreshResponse = await fetch(`${BASE}/api/auth/refresh`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ refreshToken }),
+    credentials: 'include',
   });
 
   if (!refreshResponse.ok) {
@@ -16,12 +23,14 @@ async function restoreAuthSession(refreshToken) {
 
   const refreshPayload = await refreshResponse.json();
   const nextToken = refreshPayload?.data?.token;
-  const nextRefreshToken = refreshPayload?.data?.refreshToken || refreshToken;
+
+  if (!nextToken) {
+    throw new Error('No se pudo refrescar la sesión');
+  }
 
   const meResponse = await fetch(`${BASE}/api/auth/me`, {
-    headers: {
-      Authorization: `Bearer ${nextToken}`,
-    },
+    credentials: 'include',
+    headers: { Authorization: `Bearer ${nextToken}` },
   });
 
   if (!meResponse.ok) {
@@ -31,7 +40,6 @@ async function restoreAuthSession(refreshToken) {
   const mePayload = await meResponse.json();
   return {
     token: nextToken,
-    refreshToken: nextRefreshToken,
     usuario: mePayload?.data?.usuario || null,
   };
 }
@@ -40,7 +48,6 @@ export const useAuthStore = create(
   persist(
     (set, get) => ({
       token: null,
-      refreshToken: null,
       usuario: null,
       isAuthenticated: false,
       isHydrating: true,
@@ -48,10 +55,9 @@ export const useAuthStore = create(
 
       setHydrated: (keepHydrating = false) => set({ hasHydrated: true, isHydrating: keepHydrating }),
 
-      login: ({ token, refreshToken, usuario }) =>
+      login: ({ token, usuario }) =>
         set((state) => ({
           token: token || null,
-          refreshToken: refreshToken || state.refreshToken,
           usuario: usuario || state.usuario,
           isAuthenticated: Boolean((token || state.token) && (usuario || state.usuario)),
           isHydrating: false,
@@ -59,19 +65,19 @@ export const useAuthStore = create(
         })),
 
       logout: () =>
-        set({ token: null, refreshToken: null, usuario: null, isAuthenticated: false, isHydrating: false, hasHydrated: true }),
+        set({ token: null, usuario: null, isAuthenticated: false, isHydrating: false, hasHydrated: true }),
 
       updateUsuario: (usuario) => set({ usuario }),
 
+      /**
+       * Intenta restaurar la sesión llamando a `/auth/refresh` (cookie
+       * httpOnly). Ya no depende de ningún `refreshToken` en el estado del
+       * cliente: se intenta siempre que no haya un access token en memoria
+       * (por ejemplo, tras recargar la página), y el backend decide si la
+       * cookie es válida.
+       */
       restoreSession: async () => {
         const state = get();
-        if (state.isHydrating && !state.hasHydrated) {
-          return false;
-        }
-        if (!state.refreshToken) {
-          set({ token: null, usuario: null, isAuthenticated: false, isHydrating: false, hasHydrated: true });
-          return false;
-        }
         if (state.token && state.isAuthenticated) {
           set({ isHydrating: false, hasHydrated: true });
           return true;
@@ -79,10 +85,9 @@ export const useAuthStore = create(
 
         set({ isHydrating: true });
         try {
-          const restored = await restoreAuthSession(state.refreshToken);
+          const restored = await restoreAuthSession();
           set({
             token: restored.token,
-            refreshToken: restored.refreshToken,
             usuario: restored.usuario,
             isAuthenticated: Boolean(restored.token && restored.usuario),
             isHydrating: false,
@@ -90,18 +95,24 @@ export const useAuthStore = create(
           });
           return true;
         } catch (_) {
-          set({ token: null, refreshToken: null, usuario: null, isAuthenticated: false, isHydrating: false, hasHydrated: true });
+          set({ token: null, usuario: null, isAuthenticated: false, isHydrating: false, hasHydrated: true });
           return false;
         }
       },
     }),
     {
       name: 'auth-storage-v2',
-      partialize: (state) => ({
-        refreshToken: state.refreshToken,
-      }),
+      // El refresh token ya no se persiste en localStorage (ni ningún otro
+      // dato de sesión): ahora vive solo en una cookie httpOnly que el
+      // navegador administra, fuera del alcance de JS.
+      partialize: () => ({}),
       onRehydrateStorage: () => (state) => {
-        state?.setHydrated(Boolean(state?.refreshToken));
+        // No hay nada persistido que indique si hay sesión o no; se marca
+        // como hidratado pero manteniendo `isHydrating: true` para que
+        // `ProtectedRoute`/`LoginPage` disparen `restoreSession()` (que
+        // consulta la cookie vía `/auth/refresh`) antes de decidir si hay
+        // sesión activa.
+        state?.setHydrated(true);
       },
     }
   )
