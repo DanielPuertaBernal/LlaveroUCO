@@ -106,7 +106,7 @@ class LlaveService {
       findReservaById: (id) => reservaRepository.findById(id),
       marcarReservaCheckinNFC: (payload) => reservaRepository.marcarCheckinNFC(payload),
       findDocenteByDocumento: (documento) => comunidadRepository.findByDocumento(documento),
-      createRegistro: (registro) => llaveRepository.create(registro),
+      createRegistro: (registro, trx) => llaveRepository.create(registro, trx),
       normalizarUbicacionPrestamo: (loc) => normalizarUbicacion(OPERACIONES_UBICACION.PRESTAMO_LLAVES, loc),
       normalizarUbicacionDevolucion: (loc) => normalizarUbicacion(OPERACIONES_UBICACION.DEVOLUCION_LLAVES, loc),
       persistirPrestamo: (payload) => persistirPrestamo({

@@ -3,6 +3,7 @@ const pgClient = require('../../shared/db/pg.client');
 const { TABLES } = require('../../shared/db/tables');
 const { newId } = require('../../shared/db/id');
 const { applyPagination } = require('../../shared/utils/pagination.helper');
+const ApiError = require('../../shared/errors/api.error');
 const comunidadRepository = require('../comunidad/comunidad.repository');
 const salonRepository = require('../salones/salon.repository');
 const ubicacionRepository = require('../ubicaciones/ubicacion.repository');
@@ -75,8 +76,8 @@ class LlaveRepository {
    * necesita saber el ROL de quien gestionó, no solo si el campo es NULL,
    * para no aplicar la restricción quien entregó fue admin/aux.
    */
-  _readQuery() {
-    return this.db(TABLES.REGISTROS_LLAVES)
+  _readQuery(executor = this.db) {
+    return executor(TABLES.REGISTROS_LLAVES)
       .leftJoin(`${TABLES.COMUNIDAD} as c_reg`, 'c_reg.id', `${TABLES.REGISTROS_LLAVES}.comunidad_id`)
       .leftJoin(`${TABLES.COMUNIDAD} as c_reclama`, 'c_reclama.id', `${TABLES.REGISTROS_LLAVES}.reclama_comunidad_id`)
       .leftJoin(`${TABLES.COMUNIDAD} as c_entrega`, 'c_entrega.id', `${TABLES.REGISTROS_LLAVES}.entrega_comunidad_id`)
@@ -126,9 +127,13 @@ class LlaveRepository {
       .andWhere('c_reg.numero_documento', String(documento));
   }
 
-  /** @param {string} id @returns {Promise<object|null>} */
-  async findById(id) {
-    const row = await this._readQuery().where(`${TABLES.REGISTROS_LLAVES}.id`, id).first();
+  /**
+   * @param {string} id
+   * @param {import('knex').Knex|import('knex').Knex.Transaction} [executor]
+   * @returns {Promise<object|null>}
+   */
+  async findById(id, executor = this.db) {
+    const row = await this._readQuery(executor).where(`${TABLES.REGISTROS_LLAVES}.id`, id).first();
     return row || null;
   }
 
@@ -202,6 +207,15 @@ class LlaveRepository {
       const persona = registro.numero_documento
         ? await comunidadRepository.findByDocumento(registro.numero_documento)
         : null;
+      // A diferencia de las resoluciones tolerantes de abajo (salón/
+      // ubicación), la identidad del titular del préstamo NO puede quedar en
+      // NULL: aparte de ser un problema de integridad de datos por sí solo
+      // (un préstamo sin dueño conocido), un `comunidad_id` NULL nunca choca
+      // contra el índice único de dedupe (`NULL != NULL` en Postgres),
+      // dejando pasar duplicados silenciosamente.
+      if (registro.numero_documento && !persona) {
+        throw ApiError.badRequest('No se encontró a la persona con ese documento en el sistema');
+      }
       payload.comunidad_id = persona ? persona.id : null;
     }
     if (registro.numero_documento_reclama !== undefined) {
@@ -274,27 +288,67 @@ class LlaveRepository {
     return row || null;
   }
 
-  /** @param {object} registro @returns {Promise<object>} */
-  async create(registro) {
+  /**
+   * @param {object} registro
+   * @param {import('knex').Knex|import('knex').Knex.Transaction} [executor] - trx cuando el
+   * insert forma parte de una cadena de préstamos consecutivos que debe
+   * confirmarse/revertirse en bloque (ver `persistirPrestamo`/`registrarEntrega`).
+   * @returns {Promise<object>}
+   */
+  async create(registro, executor = this.db) {
     const payload = await this._resolvePayload(registro);
-    const [row] = await this.db(TABLES.REGISTROS_LLAVES)
+    const [row] = await executor(TABLES.REGISTROS_LLAVES)
       .insert({ id: newId(), ...payload })
       .returning('*');
-    return this.findById(row.id);
+    return this.findById(row.id, executor);
   }
 
-  /** @param {string} id @param {object} updates @returns {Promise<object|null>} */
-  async update(id, updates) {
+  /**
+   * @param {string} id
+   * @param {object} updates
+   * @param {import('knex').Knex|import('knex').Knex.Transaction} [executor]
+   * @returns {Promise<object|null>}
+   */
+  async update(id, updates, executor = this.db) {
     const payload = await this._resolvePayload(updates);
-    if (!Object.keys(payload).length) return this.findById(id);
+    if (!Object.keys(payload).length) return this.findById(id, executor);
 
-    const [row] = await this.db(TABLES.REGISTROS_LLAVES)
+    const [row] = await executor(TABLES.REGISTROS_LLAVES)
       .where({ id })
       .whereNull('deleted_at')
       .update(payload)
       .returning('*');
     if (!row) return null;
-    return this.findById(id);
+    return this.findById(id, executor);
+  }
+
+  /**
+   * Variante de `update()` para el flujo de devolución: además de `id` y
+   * `deleted_at`, exige `estado = 'en_prestamo'` en la MISMA sentencia SQL
+   * (no una lectura previa + update separado). Sin esto, dos solicitudes de
+   * devolución concurrentes para el mismo registro pasan ambas la validación
+   * en JS (`registro.estado === 'en_prestamo'`, hecha en un SELECT anterior)
+   * antes de que ninguna escriba, y la segunda pisa silenciosamente
+   * `quien_entrega`/`ubicacion_devolucion` de la primera (lost update).
+   * @param {string} id
+   * @param {object} updates
+   * @param {import('knex').Knex|import('knex').Knex.Transaction} [executor]
+   * @returns {Promise<object|null>}
+   */
+  async updateDevolucion(id, updates, executor = this.db) {
+    const payload = await this._resolvePayload(updates);
+    if (!Object.keys(payload).length) return this.findById(id, executor);
+
+    const rows = await executor(TABLES.REGISTROS_LLAVES)
+      .where({ id })
+      .whereNull('deleted_at')
+      .andWhere('estado', 'en_prestamo')
+      .update(payload)
+      .returning('*');
+    if (!rows.length) {
+      throw ApiError.conflict('Esta llave ya fue devuelta');
+    }
+    return this.findById(id, executor);
   }
 }
 

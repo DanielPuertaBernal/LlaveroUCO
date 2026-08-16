@@ -436,7 +436,13 @@ function construirDatosDevolucion({
   const fechaStr = fechaEntrega && !Number.isNaN(fechaEntrega.getTime())
     ? fechaEntrega.toISOString().split('T')[0]
     : getFechaHoy();
-  const retrasoDevolucionMinutos = calcularRetrasoDevolucionMinutos(registro?.horario, fechaStr, ahora);
+  // Se pasa `fechaEntrega` (Date real) en vez de solo `fechaStr` cuando está
+  // disponible: `calcularRetrasoDevolucionMinutos` ancla el fin de horario a
+  // ese día calendario y compara por timestamp absoluto contra `ahora`, así
+  // una devolución uno o más días después se marca como retraso real (ver
+  // date.helper.js). `fechaStr` queda como respaldo cuando no hay
+  // `fecha_hora_entrega` válida en el registro.
+  const retrasoDevolucionMinutos = calcularRetrasoDevolucionMinutos(registro?.horario, fechaEntrega || fechaStr, ahora);
 
   return {
     mensaje: `Llave devuelta por ${entregaInfo.nombre || registro?.docente}`,

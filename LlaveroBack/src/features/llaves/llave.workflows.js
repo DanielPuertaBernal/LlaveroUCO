@@ -1,6 +1,7 @@
 'use strict';
 
 const ApiError = require('../../shared/errors/api.error');
+const pgClient = require('../../shared/db/pg.client');
 const { ROLES } = require('../auth/auth.constants');
 const {
   OPERACIONES_UBICACION,
@@ -433,16 +434,24 @@ function createLlaveWorkflows({
 
     // `dia_entrega` ya viene fijado (hora local de Bogotá) desde
     // `construirRegistroPrestamo`, igual que en el flujo NFC.
+    //
+    // Igual que `persistirPrestamo` (llave.write-model.js): la cadena de
+    // inserts va dentro de un `knex.transaction()` para que un fallo a mitad
+    // de camino (p. ej. el 23505 del dedupe) no deje registros anteriores de
+    // la misma cadena ya confirmados como historial huérfano.
     let created;
     const vinculosReservaIndividual = [];
     try {
-      for (const registro of registros) {
-        const origenClase = registro._origenClase;
-        created = await createRegistro(registro);
-        if (origenClase?._origen === 'individual' && origenClase?.id) {
-          vinculosReservaIndividual.push({ reservaId: origenClase.id, registroLlaveId: created.id });
+      const knex = pgClient.getKnex();
+      await knex.transaction(async (trx) => {
+        for (const registro of registros) {
+          const origenClase = registro._origenClase;
+          created = await createRegistro(registro, trx);
+          if (origenClase?._origen === 'individual' && origenClase?.id) {
+            vinculosReservaIndividual.push({ reservaId: origenClase.id, registroLlaveId: created.id });
+          }
         }
-      }
+      });
     } catch (err) {
       // Postgres unique_violation (dedupe: comunidad_id + salon_id + dia_entrega + horario)
       if (err.code === '23505') {

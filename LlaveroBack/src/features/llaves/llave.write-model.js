@@ -1,6 +1,7 @@
 'use strict';
 
 const ApiError = require('../../shared/errors/api.error');
+const pgClient = require('../../shared/db/pg.client');
 const {
   construirRegistrosPrestamo,
   construirDatosDevolucion,
@@ -54,15 +55,24 @@ async function persistirPrestamo({
   // los registros de la cadena vino de una reserva individual en modo de
   // reclamo diferido (`_origenClase._origen === 'individual'`), se recopila
   // el vínculo para que el caller marque esa reserva como reclamada.
+  //
+  // Encadenar los inserts dentro de un `knex.transaction()` (mismo patrón
+  // que `prestamo.service.js`) evita que un fallo a mitad de cadena (p. ej.
+  // el 23505 del dedupe en el último registro) deje los inserts anteriores
+  // ya confirmados como historial huérfano — o toda la cadena se persiste, o
+  // ninguna.
+  const knex = pgClient.getKnex();
   let created;
   const vinculosReservaIndividual = [];
-  for (const registro of registros) {
-    const origenClase = registro._origenClase;
-    created = await llaveRepository.create(registro);
-    if (origenClase?._origen === 'individual' && origenClase?.id) {
-      vinculosReservaIndividual.push({ reservaId: origenClase.id, registroLlaveId: created.id });
+  await knex.transaction(async (trx) => {
+    for (const registro of registros) {
+      const origenClase = registro._origenClase;
+      created = await llaveRepository.create(registro, trx);
+      if (origenClase?._origen === 'individual' && origenClase?.id) {
+        vinculosReservaIndividual.push({ reservaId: origenClase.id, registroLlaveId: created.id });
+      }
     }
-  }
+  });
   return { registro: toClientFormat(toPlain(created)), vinculosReservaIndividual };
 }
 
@@ -82,7 +92,7 @@ async function persistirDevolucion({
     gestionadoPorUsuarioId,
   });
 
-  const updated = await llaveRepository.update(registro.id, updates);
+  const updated = await llaveRepository.updateDevolucion(registro.id, updates);
   return {
     mensaje,
     registro: toClientFormat(toPlain(updated)),

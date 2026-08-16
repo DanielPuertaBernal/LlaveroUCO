@@ -68,32 +68,46 @@ function horaAMinutos(horaStr) {
 }
 
 /**
- * Evalúa si hay retraso en DEVOLUCIÓN (> 1 hora después de fin de clase)
+ * Ancla la hora de fin de un `horario` ("HH:MM A HH:MM") al día calendario
+ * de `fechaBase` (Date o string "YYYY-MM-DD"/ISO), devolviendo un `Date`
+ * absoluto en hora Bogotá (UTC-5). Usado por `calcularRetrasoDevolucion(Minutos)`
+ * para comparar por timestamp real en vez de solo minuto-del-día — así un
+ * retraso que cruza medianoche (llave devuelta al día siguiente) se computa
+ * correctamente en vez de compararse contra la hora actual como si fuera el
+ * mismo día de la entrega.
+ * @param {string} horaFinStr  Ej: "09:00"
+ * @param {Date|string} fechaBase
+ * @returns {Date|null}
+ */
+function anclarHoraFinADia(horaFinStr, fechaBase) {
+  const parsed = parseHora(horaFinStr);
+  if (!parsed) return null;
+  const fechaStr = fechaBase instanceof Date
+    ? fechaBase.toLocaleDateString('en-CA', { timeZone: 'America/Bogota' })
+    : String(fechaBase).slice(0, 10);
+  if (!fechaStr) return null;
+  const fecha = new Date(`${fechaStr}T${String(parsed.hours).padStart(2, '0')}:${String(parsed.minutes).padStart(2, '0')}:00-05:00`);
+  return Number.isNaN(fecha.getTime()) ? null : fecha;
+}
+
+/**
+ * Evalúa si hay retraso en DEVOLUCIÓN (> 1 hora después de fin de clase).
+ *
+ * Bugfix: la versión anterior solo comparaba `ahora.getHours()*60+minutes`
+ * contra `horaFin+60`, sin mirar cuántos días calendario pasaron desde
+ * `fechaEntrega` — una llave devuelta un día (o más) después, a una hora del
+ * día que por sí sola luce "temprana", se clasificaba como a tiempo. Ahora
+ * se ancla `horaFin` al día calendario real de `fechaEntrega` y se compara
+ * por timestamp absoluto contra `ahora`, así el retraso se detecta sin
+ * importar cuántos días transcurrieron.
  * @param {string} horario  Ej: "07:00 A 09:00"
- * @param {string} fechaEntrega  Ej: "2024-01-15"
+ * @param {Date|string} fechaEntrega  Fecha (Date) o "YYYY-MM-DD" del día de la entrega
  * @param {Date} ahora
  * @returns {string} Descripción del retraso o string vacío
  */
 function calcularRetrasoDevolucion(horario, fechaEntrega, ahora = new Date()) {
-  try {
-    if (!horario || !fechaEntrega) return '';
-    const partes = String(horario).toUpperCase().split(' A ');
-    if (partes.length < 2) return '';
-
-    const horaFin = horaAMinutos(partes[1].trim());
-    if (horaFin === null) return '';
-
-    const minutosAhora = ahora.getHours() * 60 + ahora.getMinutes();
-    const umbralMinutos = horaFin + 60; // 1 hora de gracia
-
-    if (minutosAhora > umbralMinutos) {
-      const retrasoMin = minutosAhora - horaFin;
-      return formatMinutos(retrasoMin);
-    }
-    return '';
-  } catch {
-    return '';
-  }
+  const minutos = calcularRetrasoDevolucionMinutos(horario, fechaEntrega, ahora);
+  return minutos ? formatMinutos(minutos) : '';
 }
 
 /**
@@ -199,7 +213,8 @@ function calcularTiempoRetraso(horario, ahora = new Date()) {
  * `tiempo_retraso_devolucion_minutos` (int) en vez del string formateado
  * ("2h 15min") que usaba Mongo; el formateo para el cliente se hace en
  * `llave.domain.js` con `formatMinutos` al leer.
- * @param {string} horario @param {string} fechaEntrega @param {Date} ahora
+ * @param {string} horario @param {Date|string} fechaEntrega Fecha (Date) o "YYYY-MM-DD" del día de la entrega
+ * @param {Date} ahora
  * @returns {number|null} Minutos de retraso, o null si no hay retraso
  */
 function calcularRetrasoDevolucionMinutos(horario, fechaEntrega, ahora = new Date()) {
@@ -207,11 +222,17 @@ function calcularRetrasoDevolucionMinutos(horario, fechaEntrega, ahora = new Dat
     if (!horario || !fechaEntrega) return null;
     const partes = String(horario).toUpperCase().split(' A ');
     if (partes.length < 2) return null;
-    const horaFin = horaAMinutos(partes[1].trim());
-    if (horaFin === null) return null;
-    const minutosAhora = ahora.getHours() * 60 + ahora.getMinutes();
-    const umbralMinutos = horaFin + 60; // 1 hora de gracia
-    if (minutosAhora > umbralMinutos) return minutosAhora - horaFin;
+
+    const limiteFin = anclarHoraFinADia(partes[1].trim(), fechaEntrega);
+    if (!limiteFin) return null;
+
+    // Comparación por timestamp absoluto (no minuto-del-día): así una
+    // devolución uno o más días calendario después de `limiteFin` se marca
+    // como retraso real, aunque la hora del reloj de `ahora` sea "temprana".
+    const umbralMs = limiteFin.getTime() + 60 * 60000; // 1 hora de gracia
+    if (ahora.getTime() > umbralMs) {
+      return Math.floor((ahora.getTime() - limiteFin.getTime()) / 60000);
+    }
     return null;
   } catch {
     return null;
