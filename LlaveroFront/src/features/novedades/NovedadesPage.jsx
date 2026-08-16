@@ -273,7 +273,7 @@ export default function NovedadesPage() {
                 setSalonGeneral('');
               }}
             >
-              <option value="general">Salón / otro (no vinculado a un préstamo o equipo)</option>
+              <option value="general">Salón</option>
               <option value="llave">Llave prestada actualmente</option>
               <option value="equipo">Un equipo del inventario</option>
             </Select>
