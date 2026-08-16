@@ -47,50 +47,71 @@ export default function LoginPage() {
 
   if (!hasHydrated || (isHydrating && refreshToken)) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-primary/10">
-        <p className="text-sm text-muted-foreground">Cargando...</p>
+      <div className="min-h-screen flex items-center justify-center bg-muted/40">
+        <div className="flex flex-col items-center gap-3">
+          <img
+            src="/logo-uco.svg"
+            alt="Universidad Católica de Oriente"
+            className="h-10 w-auto max-w-[60%] object-contain opacity-80"
+          />
+          <p className="text-sm text-muted-foreground">Cargando...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-primary/10 p-6">
-      <div className="w-full max-w-md rounded-2xl bg-card shadow-2xl border border-border overflow-hidden">
-        {/* Banner diagonal de acento */}
-        <div
-          className="h-28 bg-accent"
-          style={{ clipPath: 'polygon(0 0, 100% 0, 100% 55%, 0 100%)' }}
-        />
+    <div className="min-h-screen flex items-center justify-center bg-muted/40 p-4 sm:p-6">
+      <div className="w-full max-w-md">
+        <div className="rounded-xl bg-card shadow-xl border border-border border-t-4 border-t-primary overflow-hidden">
+          <div className="px-6 sm:px-10 pt-10 pb-8">
+            <div className="flex justify-center mb-6">
+              <img
+                src="/logo-uco.svg"
+                alt="Universidad Católica de Oriente"
+                className="h-16 w-auto max-w-[85%] object-contain"
+              />
+            </div>
 
-        <div className="px-8 pb-8 pt-2">
-          <h2 className="text-center text-2xl font-bold text-foreground mb-8">
-            Iniciar sesión
-          </h2>
+            <div className="text-center mb-8">
+              <h2 className="text-2xl font-bold text-foreground">
+                Iniciar sesión
+              </h2>
+              <span className="mt-2 inline-block h-1 w-12 rounded-full bg-accent" />
+              <p className="mt-3 text-sm text-muted-foreground">
+                Accede con tu correo institucional Office 365
+              </p>
+            </div>
 
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-            <FormField error={errors.email?.message}>
-              <div className="relative">
-                <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  {...register('email')}
-                  type="email"
-                  autoComplete="email"
-                  placeholder="correo@uco.edu.co"
-                  className="pl-9"
-                />
-              </div>
-            </FormField>
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+              <FormField error={errors.email?.message}>
+                <div className="relative">
+                  <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    {...register('email')}
+                    type="email"
+                    autoComplete="email"
+                    placeholder="correo@uco.edu.co"
+                    className="pl-9"
+                  />
+                </div>
+              </FormField>
 
-            <Button
-              type="submit"
-              disabled={loading}
-              className="w-full rounded-full bg-accent text-accent-foreground hover:bg-accent/90"
-              size="lg"
-            >
-              {loading ? 'Redirigiendo...' : 'Iniciar sesión'}
-            </Button>
-          </form>
+              <Button
+                type="submit"
+                disabled={loading}
+                className="w-full rounded-lg bg-primary text-primary-foreground hover:bg-primary/90"
+                size="lg"
+              >
+                {loading ? 'Redirigiendo...' : 'Iniciar sesión'}
+              </Button>
+            </form>
+          </div>
         </div>
+
+        <p className="mt-6 text-center text-xs text-muted-foreground">
+          Universidad Católica de Oriente &middot; Sistema de gestión de llaves
+        </p>
       </div>
     </div>
   );
