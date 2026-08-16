@@ -14,6 +14,7 @@ import {
   SheetFooter,
 } from '@/shared/components/ui/Sheet';
 import { showSuccess, showError, showConfirm } from '@/shared/utils/alert';
+import { soloNombre, soloNumerosConTope, LONGITUD_MAXIMA, esCorreoValido } from '@/shared/utils/inputValidation';
 
 function AutocompleteInput({ value, onChange, options = [], placeholder }) {
   const [open, setOpen] = useState(false);
@@ -128,7 +129,7 @@ export default function ComunidadPage() {
     if (!form.nombre?.trim()) errs.nombre = 'El nombre es requerido';
     if (!form.tipo?.trim()) errs.tipo = 'Seleccione un tipo';
     if (form.numero_contacto?.trim() && !/^\d+$/.test(form.numero_contacto.trim())) errs.numero_contacto = 'Solo se permiten números';
-    if (form.correo?.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.correo.trim())) errs.correo = 'Correo no válido (ej: usuario@dominio.com)';
+    if (form.correo?.trim() && !esCorreoValido(form.correo.trim())) errs.correo = 'Correo no válido (ej: usuario@dominio.com)';
     if (Object.keys(errs).length) { setErrors(errs); return; }
 
     try {
@@ -145,7 +146,7 @@ export default function ComunidadPage() {
         showSuccess('Persona registrada correctamente');
       } else {
         await actualizarPersona.mutateAsync({
-          id: sheet.data._id,
+          id: sheet.data.id,
           nombre: form.nombre.trim(),
           tipo: form.tipo,
           facultad: form.facultad.trim(),
@@ -168,7 +169,7 @@ export default function ComunidadPage() {
     );
     if (!isConfirmed) return;
     try {
-      await eliminarPersona.mutateAsync(persona._id);
+      await eliminarPersona.mutateAsync(persona.id);
       showSuccess('Persona eliminada correctamente');
     } catch (e) {
       showError(e.response?.data?.message || 'Error al eliminar');
@@ -228,7 +229,7 @@ export default function ComunidadPage() {
       />
 
       <Sheet open={sheet.open} onOpenChange={(v) => !v && cerrarSheet()}>
-        <SheetContent>
+        <SheetContent className="max-w-2xl">
           <SheetHeader>
             <SheetTitle>{sheet.modo === 'crear' ? 'Registrar persona' : 'Editar persona'}</SheetTitle>
             {sheet.modo === 'editar' && (
@@ -238,23 +239,24 @@ export default function ComunidadPage() {
             )}
           </SheetHeader>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {sheet.modo === 'crear' && (
-              <FormField label="Número de documento" required error={errors.numero_documento} className="col-span-2">
+              <FormField label="Número de documento" required error={errors.numero_documento}>
                 <Input
                   placeholder="Solo dígitos"
                   inputMode="numeric"
+                  maxLength={LONGITUD_MAXIMA.documento}
                   value={form.numero_documento || ''}
-                  onChange={(e) => setForm({ ...form, numero_documento: e.target.value.replace(/\D/g, '') })}
+                  onChange={(e) => setForm({ ...form, numero_documento: soloNumerosConTope(e.target.value, LONGITUD_MAXIMA.documento) })}
                 />
               </FormField>
             )}
 
-            <FormField label="Nombre" required error={errors.nombre} className="col-span-2">
+            <FormField label="Nombre" required error={errors.nombre}>
               <Input
                 placeholder="Nombre completo"
                 value={form.nombre || ''}
-                onChange={(e) => setForm({ ...form, nombre: e.target.value })}
+                onChange={(e) => setForm({ ...form, nombre: soloNombre(e.target.value) })}
               />
             </FormField>
 
@@ -273,21 +275,25 @@ export default function ComunidadPage() {
             <FormField label="ID Carnet">
               <Input
                 placeholder="ID NFC"
+                maxLength={LONGITUD_MAXIMA.carnet}
                 value={form.id_carnet || ''}
-                onChange={(e) => setForm({ ...form, id_carnet: e.target.value })}
+                onChange={(e) => setForm({ ...form, id_carnet: soloNumerosConTope(e.target.value, LONGITUD_MAXIMA.carnet) })}
               />
+              <p className="text-xs text-muted-foreground mt-1">
+                Puede acercar el carnet al lector NFC para completar este campo automáticamente.
+              </p>
             </FormField>
 
-            <FormField label="Facultad" className="col-span-2">
+            <FormField label="Facultad">
               <AutocompleteInput
                 placeholder="Facultad o dependencia"
                 value={form.facultad || ''}
-                onChange={(val) => setForm({ ...form, facultad: val })}
+                onChange={(val) => setForm({ ...form, facultad: soloNombre(val) })}
                 options={facultadesUnicas}
               />
             </FormField>
 
-            <FormField label="Correo" className="col-span-2" error={errors.correo}>
+            <FormField label="Correo" error={errors.correo}>
               <Input
                 type="email"
                 placeholder="correo@ejemplo.com"
@@ -296,12 +302,13 @@ export default function ComunidadPage() {
               />
             </FormField>
 
-            <FormField label="Número de contacto" className="col-span-2" error={errors.numero_contacto}>
+            <FormField label="Número de contacto" error={errors.numero_contacto}>
               <Input
                 inputMode="numeric"
                 placeholder="Solo dígitos"
+                maxLength={LONGITUD_MAXIMA.contacto}
                 value={form.numero_contacto || ''}
-                onChange={(e) => setForm({ ...form, numero_contacto: e.target.value.replace(/\D/g, '') })}
+                onChange={(e) => setForm({ ...form, numero_contacto: soloNumerosConTope(e.target.value, LONGITUD_MAXIMA.contacto) })}
               />
             </FormField>
           </div>

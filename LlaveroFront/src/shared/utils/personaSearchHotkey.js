@@ -301,7 +301,7 @@ export async function abrirBuscadorPersonaPorNombre({
           });
         }
 
-        if (!resultadosFiltrados.some((p) => String(p._id || p.numero_documento || p.id_carnet || p.nombre) === selectedId)) {
+        if (!resultadosFiltrados.some((p) => String(p.id || p.numero_documento || p.id_carnet || p.nombre) === selectedId)) {
           selectedId = null;
         }
 
@@ -316,7 +316,7 @@ export async function abrirBuscadorPersonaPorNombre({
 
         body.innerHTML = resultadosFiltrados
           .map((persona) => {
-            const rowId = String(persona._id || persona.numero_documento || persona.id_carnet || `${persona.nombre}-${persona.tipo || ''}`);
+            const rowId = String(persona.id || persona.numero_documento || persona.id_carnet || `${persona.nombre}-${persona.tipo || ''}`);
             const selectedClass = rowId === selectedId ? 'is-selected' : '';
             return `
               <tr class="persona-row ${selectedClass}" data-row-id="${escapeHtml(rowId)}">
@@ -361,7 +361,7 @@ export async function abrirBuscadorPersonaPorNombre({
         return null;
       }
       const personaSeleccionada = resultadosFiltrados.find(
-        (p) => String(p._id || p.numero_documento || p.id_carnet || p.nombre) === selectedId
+        (p) => String(p.id || p.numero_documento || p.id_carnet || p.nombre) === selectedId
       );
       if (!personaSeleccionada) {
         Swal.showValidationMessage('La selección ya no es válida. Vuelve a elegir una fila.');

@@ -1,29 +1,12 @@
 import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import { useAuthStore } from '@/features/auth/authStore';
 import { usuariosApi } from '@/features/usuarios/usuariosApi';
 import { showSuccess, showError } from '@/shared/utils/alert';
-import { User, Pencil, Lock, Mail, Phone } from 'lucide-react';
+import { User, Pencil, Mail, Phone } from 'lucide-react';
 import StatusBadge from '@/shared/components/ui/StatusBadge';
 import Button from '@/shared/components/ui/Button';
 import { FormField, Input } from '@/shared/components/ui/FormField';
-import PasswordStrengthIndicator from '@/shared/components/ui/PasswordStrengthIndicator';
-
-const passwordChangeSchema = z.object({
-  passwordActual: z.string().min(1, 'Contraseña actual requerida'),
-  passwordNueva: z
-    .string()
-    .min(8, 'Mínimo 8 caracteres')
-    .regex(/[A-Z]/, 'Debe contener una mayúscula')
-    .regex(/[a-z]/, 'Debe contener una minúscula')
-    .regex(/[0-9]/, 'Debe contener un número')
-    .regex(/[!@#$%^&*(),.?":{}|<>\-_=+\[\]\\/~`]/, 'Debe contener un carácter especial'),
-  confirmar: z.string().min(1, 'Confirme la nueva contraseña'),
-}).refine((d) => d.passwordNueva === d.confirmar, {
-  message: 'Las contraseñas no coinciden',
-  path: ['confirmar'],
-});
+import { soloNombre, soloNumerosConTope, LONGITUD_MAXIMA, esCorreoValido } from '@/shared/utils/inputValidation';
 
 export default function PerfilPage() {
   const { usuario, updateUsuario } = useAuthStore();
@@ -31,25 +14,21 @@ export default function PerfilPage() {
   const perfilForm = useForm({
     defaultValues: { nombre: usuario?.nombre, email: usuario?.email, contacto: usuario?.contacto },
   });
-  const passForm = useForm({ resolver: zodResolver(passwordChangeSchema) });
+
+  const registroNombre = perfilForm.register('nombre');
+  const registroContacto = perfilForm.register('contacto');
 
   async function onEditarPerfil(data) {
+    if (data.email && !esCorreoValido(data.email)) {
+      showError('Correo no válido (ej: usuario@dominio.com)');
+      return;
+    }
     try {
       const res = await usuariosApi.editarPerfil(data);
       updateUsuario(res.data.data.usuario);
       showSuccess('Perfil actualizado correctamente');
     } catch (e) {
       showError(e.response?.data?.message || 'Error al actualizar perfil');
-    }
-  }
-
-  async function onCambiarContrasena(data) {
-    try {
-      await usuariosApi.cambiarContrasena({ passwordActual: data.passwordActual, passwordNueva: data.passwordNueva });
-      passForm.reset();
-      showSuccess('Contraseña cambiada exitosamente');
-    } catch (e) {
-      showError(e.response?.data?.message || 'Error al cambiar contraseña');
     }
   }
 
@@ -88,48 +67,33 @@ export default function PerfilPage() {
         <StatusBadge variant="info" className="shrink-0">{usuario?.rol}</StatusBadge>
       </div>
 
-      {/* Two columns */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        {/* Editar perfil */}
-        <div className="bg-card border border-border rounded-xl p-5 space-y-4">
-          <div className="flex items-center gap-2 pb-3 border-b border-border">
-            <Pencil className="h-4 w-4 text-primary" />
-            <h2 className="font-semibold text-foreground">Editar información</h2>
-          </div>
-          <form onSubmit={perfilForm.handleSubmit(onEditarPerfil)} className="space-y-3">
-            <FormField label="Nombre completo">
-              <Input {...perfilForm.register('nombre')} />
-            </FormField>
-            <FormField label="Email">
-              <Input {...perfilForm.register('email')} type="email" />
-            </FormField>
-            <FormField label="Teléfono">
-              <Input {...perfilForm.register('contacto')} type="tel" inputMode="numeric" />
-            </FormField>
-            <Button type="submit" className="w-full mt-1">Guardar cambios</Button>
-          </form>
+      {/* Editar perfil */}
+      <div className="bg-card border border-border rounded-xl p-5 space-y-4 max-w-lg">
+        <div className="flex items-center gap-2 pb-3 border-b border-border">
+          <Pencil className="h-4 w-4 text-primary" />
+          <h2 className="font-semibold text-foreground">Editar información</h2>
         </div>
-
-        {/* Cambiar contraseña */}
-        <div className="bg-card border border-border rounded-xl p-5 space-y-4">
-          <div className="flex items-center gap-2 pb-3 border-b border-border">
-            <Lock className="h-4 w-4 text-primary" />
-            <h2 className="font-semibold text-foreground">Cambiar contraseña</h2>
-          </div>
-          <form onSubmit={passForm.handleSubmit(onCambiarContrasena)} className="space-y-3">
-            <FormField label="Contraseña actual" error={passForm.formState.errors.passwordActual?.message}>
-              <Input {...passForm.register('passwordActual')} type="password" />
-            </FormField>
-            <FormField label="Nueva contraseña">
-              <Input {...passForm.register('passwordNueva')} type="password" />
-              <PasswordStrengthIndicator password={passForm.watch('passwordNueva') || ''} />
-            </FormField>
-            <FormField label="Confirmar nueva contraseña" error={passForm.formState.errors.confirmar?.message}>
-              <Input {...passForm.register('confirmar')} type="password" />
-            </FormField>
-            <Button type="submit" className="w-full mt-1">Cambiar contraseña</Button>
-          </form>
-        </div>
+        <form onSubmit={perfilForm.handleSubmit(onEditarPerfil)} className="space-y-3">
+          <FormField label="Nombre completo">
+            <Input
+              {...registroNombre}
+              onChange={(e) => { e.target.value = soloNombre(e.target.value); registroNombre.onChange(e); }}
+            />
+          </FormField>
+          <FormField label="Email">
+            <Input {...perfilForm.register('email')} type="email" maxLength={100} />
+          </FormField>
+          <FormField label="Teléfono">
+            <Input
+              {...registroContacto}
+              type="tel"
+              inputMode="numeric"
+              maxLength={LONGITUD_MAXIMA.contacto}
+              onChange={(e) => { e.target.value = soloNumerosConTope(e.target.value, LONGITUD_MAXIMA.contacto); registroContacto.onChange(e); }}
+            />
+          </FormField>
+          <Button type="submit" className="w-full mt-1">Guardar cambios</Button>
+        </form>
       </div>
     </div>
   );

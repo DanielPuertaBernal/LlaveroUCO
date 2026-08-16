@@ -22,7 +22,7 @@ import { cn } from '@/shared/lib/utils';
 import { MobileTimePicker } from '@mui/x-date-pickers/MobileTimePicker';
 import dayjs from 'dayjs';
 import { abrirBuscadorPersonaPorNombre } from '@/shared/utils/personaSearchHotkey';
-import { soloAlfanumerico, soloNombre, sinHTML } from '@/shared/utils/inputValidation';
+import { soloAlfanumerico, sinHTML, soloNumerosConTope, LONGITUD_MAXIMA } from '@/shared/utils/inputValidation';
 
 const DIAS_SEMANA = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 
@@ -40,7 +40,11 @@ const FRANJA_INICIAL = { dia: '', hora_inicio: '', hora_fin: '', nombre_salon: '
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-function FranjaRow({ franja, index, onChange, onRemove, otrasSelecciones, semestreCtx, excluirGrupoId }) {
+function FranjaRow({ franja, index, onChange, onRemove, otrasSelecciones, semestreCtx, excluirGrupoId, docenteDocumento }) {
+  const esMonitorInvalido = Boolean(
+    franja.con_monitor && franja.monitor_documento && docenteDocumento &&
+    String(franja.monitor_documento).trim() === docenteDocumento
+  );
   const { data: salonesDisponibles = [], isFetching: isFetchingSalones } = useSalonesDisponiblesFranja(
     franja.dia,
     franja.hora_inicio,
@@ -163,7 +167,7 @@ function FranjaRow({ franja, index, onChange, onRemove, otrasSelecciones, semest
           <X size={14} />
         </button>
       </div>
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
         <FormField label="Día">
           <Select
             value={franja.dia}
@@ -200,7 +204,7 @@ function FranjaRow({ franja, index, onChange, onRemove, otrasSelecciones, semest
 
       {/* Selector de salón disponible para esta franja */}
       {franjaCompleta && (
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <FormField label="Bloque disponible">
             {isFetchingSalones
               ? <p className="text-xs text-foreground/50 flex items-center gap-1"><Loader2 size={10} className="animate-spin" /> Buscando…</p>
@@ -287,7 +291,8 @@ function FranjaRow({ franja, index, onChange, onRemove, otrasSelecciones, semest
               <div className="flex gap-1">
                 <Input
                   value={franja.monitor_documento}
-                  onChange={(e) => onChange({ ...franja, monitor_documento: soloAlfanumerico(e.target.value), monitor_nombre: '' })}
+                  maxLength={LONGITUD_MAXIMA.documento}
+                  onChange={(e) => onChange({ ...franja, monitor_documento: soloNumerosConTope(e.target.value, LONGITUD_MAXIMA.documento), monitor_nombre: '' })}
                   onKeyDown={(e) => e.key === 'Enter' && buscarMonitorFranja(franja.monitor_documento)}
                   placeholder="Documento o carnet del monitor"
                 />
@@ -301,9 +306,21 @@ function FranjaRow({ franja, index, onChange, onRemove, otrasSelecciones, semest
                   {buscandoMonitor ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
                 </button>
               </div>
-              {franja.monitor_nombre && (
+              {franja.monitor_nombre && !esMonitorInvalido && (
                 <p className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
                   <CheckCircle2 size={11} /> Monitor asignado: <strong>{franja.monitor_nombre}</strong>
+                  <button
+                    type="button"
+                    onClick={() => onChange({ ...franja, monitor_documento: '', monitor_nombre: '' })}
+                    className="ml-1 text-foreground/40 hover:text-destructive transition-colors"
+                  >
+                    <X size={10} />
+                  </button>
+                </p>
+              )}
+              {esMonitorInvalido && (
+                <p className="text-xs text-destructive flex items-center gap-1">
+                  <AlertTriangle size={11} /> No puedes asignarte a ti mismo como monitor.
                   <button
                     type="button"
                     onClick={() => onChange({ ...franja, monitor_documento: '', monitor_nombre: '' })}
@@ -519,6 +536,19 @@ export default function ReservasSemestralesPage() {
       return;
     }
 
+    const docenteDocumento = String((requiereResponsable ? form.responsable_documento : form.solicitante_documento) || '').trim();
+    const franjaMonitorInvalida = franjasValidas.find(
+      (f) => f.con_monitor && f.monitor_documento && docenteDocumento && String(f.monitor_documento).trim() === docenteDocumento
+    );
+    if (franjaMonitorInvalida) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Monitor inválido',
+        text: `Franja del ${franjaMonitorInvalida.dia}: el monitor no puede ser la misma persona que el ${requiereResponsable ? 'profesor responsable' : 'docente'} de la reserva.`,
+      });
+      return;
+    }
+
     const sinSalon = franjasValidas.filter((f) => !f.nombre_salon);
     if (sinSalon.length > 0) {
       Swal.fire({ icon: 'warning', title: 'Salón no asignado', text: `${sinSalon.length === 1 ? 'Una franja no tiene' : `${sinSalon.length} franjas no tienen`} salón asignado.` });
@@ -567,7 +597,7 @@ export default function ReservasSemestralesPage() {
 
     if (modoEdicion) {
       actualizar.mutate(
-        { id: editData._id, ...payload },
+        { id: editData.id, ...payload },
         {
           onSuccess: () => {
             toast.success('Reserva semestral actualizada correctamente');
@@ -600,8 +630,8 @@ export default function ReservasSemestralesPage() {
   const excluirGrupoId = modoEdicion ? editData?.grupo_id : null;
 
   return (
-    <div className="space-y-5 p-6">
-      <div className="flex items-start justify-between gap-3">
+    <div className="space-y-5 p-4 sm:p-6">
+      <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
             <BookMarked className="h-6 w-6" />
@@ -670,11 +700,12 @@ export default function ReservasSemestralesPage() {
               <Input
                 value={form.solicitante_documento}
                 onChange={(e) => {
-                  setForm((f) => ({ ...f, solicitante_documento: soloAlfanumerico(e.target.value), solicitante_nombre: '', tipo_solicitante: 'docente', responsable_documento: '', responsable_nombre: '' }));
+                  setForm((f) => ({ ...f, solicitante_documento: soloNumerosConTope(e.target.value, LONGITUD_MAXIMA.documento), solicitante_nombre: '', tipo_solicitante: 'docente', responsable_documento: '', responsable_nombre: '' }));
                   setSolicitanteEncontrado(null);
                   setResponsableEncontrado(null);
                 }}
                 placeholder="Escanee carnet o escriba documento"
+                maxLength={LONGITUD_MAXIMA.documento}
                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); buscarPersona(form.solicitante_documento, 'solicitante'); } }}
               />
               <button
@@ -710,8 +741,9 @@ export default function ReservasSemestralesPage() {
                 <div className="flex gap-1">
                   <Input
                     value={form.responsable_documento}
-                    onChange={(e) => { setForm((f) => ({ ...f, responsable_documento: soloAlfanumerico(e.target.value) })); setResponsableEncontrado(null); }}
+                    onChange={(e) => { setForm((f) => ({ ...f, responsable_documento: soloNumerosConTope(e.target.value, LONGITUD_MAXIMA.documento) })); setResponsableEncontrado(null); }}
                     placeholder="Escanee carnet o escriba documento"
+                    maxLength={LONGITUD_MAXIMA.documento}
                     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); buscarPersona(form.responsable_documento, 'responsable'); } }}
                   />
                   <button
@@ -776,6 +808,7 @@ export default function ReservasSemestralesPage() {
               onRemove={() => setFranjas((prev) => prev.filter((_, idx) => idx !== i))}
               semestreCtx={{ semestre: form.semestre }}
               excluirGrupoId={excluirGrupoId}
+              docenteDocumento={String((form.tipo_solicitante === 'estudiante' ? form.responsable_documento : form.solicitante_documento) || '').trim()}
             />
           ))}
         </div>

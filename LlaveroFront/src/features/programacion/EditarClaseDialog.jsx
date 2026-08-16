@@ -11,6 +11,7 @@ import {
 } from '@/shared/components/ui/Dialog';
 import { FormField, Input, Select } from '@/shared/components/ui/FormField';
 import Button from '@/shared/components/ui/Button';
+import { soloNumerosConTope, sinHTML, LONGITUD_MAXIMA } from '@/shared/utils/inputValidation';
 import { MobileTimePicker } from '@mui/x-date-pickers/MobileTimePicker';
 import dayjs from 'dayjs';
 import { abrirBuscadorPersonaPorNombre } from '@/shared/utils/personaSearchHotkey';
@@ -55,7 +56,7 @@ export default function EditarClaseDialog({ open, onOpenChange, clase, semestre,
   useEffect(() => {
     if (clase && open) {
       setClaseData(clase);
-      claseIdRef.current = clase._id;
+      claseIdRef.current = clase.id;
       const diaMatchado = DIAS.find(
         (d) => d.toLowerCase() === (clase.dia || '').toLowerCase()
       ) || clase.dia || '';
@@ -324,14 +325,15 @@ export default function EditarClaseDialog({ open, onOpenChange, clase, semestre,
             <RadixTabs.Content value="info" className="space-y-4">
 
               {/* Docente */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <FormField label="Número de documento">
                   <div className="flex gap-2">
                     <Input
                       placeholder="Cédula o código"
                       value={formInfo.numero_documento || ''}
-                      onChange={(e) => setFormInfo((f) => ({ ...f, numero_documento: e.target.value }))}
+                      onChange={(e) => setFormInfo((f) => ({ ...f, numero_documento: soloNumerosConTope(e.target.value, LONGITUD_MAXIMA.documento) }))}
                       onKeyDown={(e) => { if (e.key === 'F1') { e.preventDefault(); handleBuscarDocente(); } }}
+                      maxLength={LONGITUD_MAXIMA.documento}
                       className="flex-1"
                     />
                     <Button variant="outline" size="sm" onClick={handleBuscarDocente} title="Buscar docente" className="shrink-0">
@@ -366,7 +368,7 @@ export default function EditarClaseDialog({ open, onOpenChange, clase, semestre,
                   return m === 0 ? `${h}h` : `${h}h ${m}min`;
                 })();
                 return (
-                  <div className="bg-muted/40 border border-border rounded-lg px-4 py-3 grid grid-cols-3 gap-x-6 gap-y-3">
+                  <div className="bg-muted/40 border border-border rounded-lg px-4 py-3 grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-3">
                     <div>
                       <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-0.5">Código materia</p>
                       <p className="text-sm font-mono font-semibold text-foreground">{claseData?.codigo_materia || '—'}</p>
@@ -397,7 +399,7 @@ export default function EditarClaseDialog({ open, onOpenChange, clase, semestre,
                   className="flex min-h-[70px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none"
                   placeholder="Observaciones de la clase..."
                   value={formInfo.observaciones || ''}
-                  onChange={(e) => setFormInfo((f) => ({ ...f, observaciones: e.target.value }))}
+                  onChange={(e) => setFormInfo((f) => ({ ...f, observaciones: sinHTML(e.target.value) }))}
                 />
               </FormField>
 
@@ -563,7 +565,7 @@ export default function EditarClaseDialog({ open, onOpenChange, clase, semestre,
 
             {/* ── TAB 3: Horario y Salón ── */}
             <RadixTabs.Content value="horario" className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormField label="Día">
                   <Select
                     value={formHorario.dia || ''}

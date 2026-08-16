@@ -38,6 +38,7 @@ import {
 } from 'lucide-react';
 import Button from '@/shared/components/ui/Button';
 import { FormField, Input, Select } from '@/shared/components/ui/FormField';
+import { soloAlfanumericoConGuion } from '@/shared/utils/inputValidation';
 import {
   Sheet,
   SheetContent,
@@ -302,8 +303,8 @@ export default function SalonesPage() {
   return (
     <div className="space-y-6">
       {/* ── Header ─────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           {selectedBloque && (
             <button
               onClick={() => { setSelectedBloque(null); setBusquedaSalones(''); }}
@@ -332,7 +333,7 @@ export default function SalonesPage() {
             Agregar salón
           </Button>
         ) : (
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <Button variant="outline" onClick={() => openSheet('tipos-silleteria')}>
               <Armchair className="h-4 w-4" />
               Tipos de silletería
@@ -374,10 +375,10 @@ export default function SalonesPage() {
                   </p>
                   <div
                     onClick={() => { setSelectedBloque(salonEncontradoEnBloque.nombre_bloque); setBusquedaBloques(''); }}
-                    className="relative bg-card border-2 border-emerald-500/50 rounded-xl p-5 cursor-pointer hover:border-emerald-500 hover:shadow-md transition-all group w-fit min-w-[180px]"
+                    className="relative bg-card border-2 border-emerald-500/50 rounded-xl p-4 sm:p-5 cursor-pointer hover:border-emerald-500 hover:shadow-md transition-all group w-fit min-w-[160px] max-w-full"
                   >
-                    <Building2 className="h-8 w-8 text-emerald-500 mb-3" />
-                    <h3 className="font-semibold text-foreground text-lg leading-tight">
+                    <Building2 className="h-7 w-7 sm:h-8 sm:w-8 text-emerald-500 mb-2 sm:mb-3" />
+                    <h3 className="font-semibold text-foreground text-base sm:text-lg leading-tight">
                       {salonEncontradoEnBloque.nombre_bloque}
                     </h3>
                     <p className="text-sm text-muted-foreground mt-0.5">
@@ -391,9 +392,9 @@ export default function SalonesPage() {
           </div>
 
           {loadingBloques ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
               {[...Array(8)].map((_, i) => (
-                <div key={i} className="bg-muted/50 rounded-xl h-36 animate-pulse" />
+                <div key={i} className="bg-muted/50 rounded-xl h-32 sm:h-36 animate-pulse" />
               ))}
             </div>
           ) : bloques.length === 0 ? (
@@ -403,12 +404,12 @@ export default function SalonesPage() {
               <p className="text-sm">Crea el primer bloque para empezar</p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
               {bloquesSalones.map((b) => (
                 <div
                   key={b.id}
                   onClick={() => setSelectedBloque(b.nombre_bloque)}
-                  className="relative bg-card border border-border rounded-xl p-5 cursor-pointer hover:border-primary/50 hover:shadow-md transition-all group"
+                  className="relative bg-card border border-border rounded-xl p-4 sm:p-5 cursor-pointer hover:border-primary/50 hover:shadow-md transition-all group"
                 >
                   <button
                     onClick={(e) => {
@@ -442,14 +443,14 @@ export default function SalonesPage() {
                     </div>
                   )}
 
-                  <Building2 className="h-8 w-8 text-primary mb-3" />
-                  <h3 className="font-semibold text-foreground text-lg leading-tight">
+                  <Building2 className="h-7 w-7 sm:h-8 sm:w-8 text-primary mb-2 sm:mb-3" />
+                  <h3 className="font-semibold text-foreground text-base sm:text-lg leading-tight break-words">
                     {b.nombre_bloque}
                   </h3>
-                  <p className="text-sm text-muted-foreground mt-0.5">
+                  <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
                     {b.count} {b.count === 1 ? 'salón' : 'salones'}
                   </p>
-                  <ChevronRight className="absolute bottom-4 right-4 h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                  <ChevronRight className="absolute bottom-3 right-3 sm:bottom-4 sm:right-4 h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
                 </div>
               ))}
             </div>
@@ -565,7 +566,7 @@ export default function SalonesPage() {
                 <Input
                   placeholder="Ej: Bloque J"
                   value={form.nombre_bloque || ''}
-                  onChange={(e) => setForm({ ...form, nombre_bloque: e.target.value })}
+                  onChange={(e) => setForm({ ...form, nombre_bloque: soloAlfanumericoConGuion(e.target.value) })}
                 />
               </FormField>
             </div>
@@ -654,13 +655,13 @@ export default function SalonesPage() {
 
           {/* Salon form */}
           {(sheet.tipo === 'nuevo-salon' || sheet.tipo === 'editar-salon') && (
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormField label="Nombre Salón" required error={errors.nombre_salon} className="col-span-2">
                 <Input
                   list={sheetEsNuevoSalon ? 'aulas-prog-list' : undefined}
                   placeholder={sheetEsNuevoSalon ? 'Escribe o selecciona de programación...' : 'Ej: J-101'}
                   value={form.nombre_salon || ''}
-                  onChange={(e) => setForm({ ...form, nombre_salon: e.target.value })}
+                  onChange={(e) => setForm({ ...form, nombre_salon: soloAlfanumericoConGuion(e.target.value) })}
                 />
                 {sheetEsNuevoSalon && (
                   <datalist id="aulas-prog-list">

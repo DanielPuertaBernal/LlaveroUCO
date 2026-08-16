@@ -3,14 +3,14 @@ import Button from '@/shared/components/ui/Button';
 import { FormField, Input, Select } from '@/shared/components/ui/FormField';
 import { cn } from '@/shared/lib/utils';
 import DisponibilidadAgenda from '@/shared/components/DisponibilidadAgenda';
-import { soloAlfanumerico, soloNombre, sinHTML } from '@/shared/utils/inputValidation';
+import { soloNombre, sinHTML, soloNumerosConTope, LONGITUD_MAXIMA } from '@/shared/utils/inputValidation';
 import { MobileTimePicker } from '@mui/x-date-pickers/MobileTimePicker';
 import { MobileDatePicker } from '@mui/x-date-pickers/MobileDatePicker';
 import dayjs from 'dayjs';
 
 export default function ReservasNuevaTab({
   form, setForm,
-  bloques, salonesFiltrados,
+  salones = [],
   disponibilidad,
   solicitanteEncontrado, setSolicitanteEncontrado,
   responsableEncontrado, setResponsableEncontrado,
@@ -130,7 +130,7 @@ export default function ReservasNuevaTab({
                   onChange={(e) => {
                     setForm((f) => ({
                       ...f,
-                      solicitante_documento: soloAlfanumerico(e.target.value),
+                      solicitante_documento: soloNumerosConTope(e.target.value, LONGITUD_MAXIMA.documento),
                       solicitante_nombre: '',
                       tipo_solicitante: 'docente',
                       responsable_documento: '',
@@ -140,6 +140,7 @@ export default function ReservasNuevaTab({
                     setResponsableEncontrado(null);
                   }}
                   placeholder="Escanee carnet o escriba documento"
+                  maxLength={LONGITUD_MAXIMA.documento}
                   disabled={isReadonly}
                   onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); buscarPersona(form.solicitante_documento, 'solicitante'); } }}
                 />
@@ -176,8 +177,9 @@ export default function ReservasNuevaTab({
                   <div className="flex gap-1">
                     <Input
                       value={form.responsable_documento}
-                      onChange={(e) => { setForm((f) => ({ ...f, responsable_documento: soloAlfanumerico(e.target.value) })); setResponsableEncontrado(null); }}
+                      onChange={(e) => { setForm((f) => ({ ...f, responsable_documento: soloNumerosConTope(e.target.value, LONGITUD_MAXIMA.documento) })); setResponsableEncontrado(null); }}
                       placeholder="Escanee carnet o escriba documento"
+                      maxLength={LONGITUD_MAXIMA.documento}
                       disabled={isReadonly}
                       onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); buscarPersona(form.responsable_documento, 'responsable'); } }}
                     />
@@ -207,32 +209,40 @@ export default function ReservasNuevaTab({
               </>
             )}
 
-            {/* 7. Bloque */}
-            <FormField label="Bloque">
-              <Select
-                value={form.nombre_bloque}
-                onChange={(e) => setForm((f) => ({ ...f, nombre_bloque: e.target.value, nombre_salon: '' }))}
-                disabled={isReadonly}
-              >
-                <option value="">Seleccionar bloque</option>
-                {bloques.map((b) => (
-                  <option key={b.nombre_bloque} value={b.nombre_bloque}>{b.nombre_bloque}</option>
-                ))}
-              </Select>
-            </FormField>
-
-            {/* 8. Salón */}
-            <FormField label="Salón">
-              <Select
+            {/* 7. Salón (busca por nombre, el bloque se deriva solo) */}
+            <FormField label="Salón" className="sm:col-span-2">
+              <Input
+                list="reserva-salones-list"
                 value={form.nombre_salon}
-                onChange={(e) => setForm((f) => ({ ...f, nombre_salon: e.target.value }))}
-                disabled={!form.nombre_bloque || isReadonly}
-              >
-                <option value="">Seleccionar salón</option>
-                {salonesFiltrados.map((s) => (
-                  <option key={s.nombre_salon} value={s.nombre_salon}>{s.nombre_salon}</option>
-                ))}
-              </Select>
+                onChange={(e) => {
+                  const nombre = e.target.value;
+                  const salon = salones.find(
+                    (s) => s.nombre_salon.toLowerCase() === nombre.toLowerCase()
+                  );
+                  setForm((f) => ({
+                    ...f,
+                    nombre_salon: nombre,
+                    nombre_bloque: salon ? salon.nombre_bloque : '',
+                  }));
+                }}
+                placeholder="Ej: M210, J4..."
+                disabled={isReadonly}
+              />
+              <datalist id="reserva-salones-list">
+                {form.nombre_salon.trim() &&
+                  salones
+                    .filter((s) => s.nombre_salon.toLowerCase().includes(form.nombre_salon.trim().toLowerCase()))
+                    .map((s) => (
+                      <option key={s.id} value={s.nombre_salon}>{s.nombre_bloque}</option>
+                    ))}
+              </datalist>
+              {form.nombre_salon && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  {form.nombre_bloque
+                    ? `Bloque: ${form.nombre_bloque}`
+                    : 'Salón no reconocido — verifica el nombre'}
+                </p>
+              )}
             </FormField>
 
             {/* 9. Motivo */}

@@ -16,6 +16,7 @@ import { Monitor, Pencil, Trash2, Download } from 'lucide-react';
 import StatusBadge from '@/shared/components/ui/StatusBadge';
 import Button from '@/shared/components/ui/Button';
 import { FormField, Input, Select } from '@/shared/components/ui/FormField';
+import { soloAlfanumericoConGuion } from '@/shared/utils/inputValidation';
 import {
   Sheet,
   SheetContent,
@@ -67,7 +68,7 @@ export default function EquiposPage() {
     }
 
     return equipos.map((eq) => {
-      const docentePrestamo = prestadoPorEquipo.get(String(eq._id));
+      const docentePrestamo = prestadoPorEquipo.get(String(eq.id));
       return {
         ...eq,
         estado_operativo: docentePrestamo ? 'en_prestamo' : 'activo',
@@ -143,7 +144,7 @@ export default function EquiposPage() {
 
       if (equipoEditando) {
         await actualizar.mutateAsync({
-          id: equipoEditando._id,
+          id: equipoEditando.id,
           ...payload,
           estado: data.estado,
         });
@@ -167,9 +168,9 @@ export default function EquiposPage() {
     if (!confirm.isConfirmed) return;
 
     try {
-      await eliminar.mutateAsync(equipo._id);
+      await eliminar.mutateAsync(equipo.id);
       showSuccess('Equipo eliminado correctamente');
-      if (equipoEditando?._id === equipo._id) {
+      if (equipoEditando?.id === equipo.id) {
         cerrarSheet();
       }
     } catch (err) {
@@ -263,13 +264,13 @@ export default function EquiposPage() {
       render: (_v, row) => (
         <div className="inline-flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => abrirEdicion(row)} title="Editar equipo">
-            <Pencil className="h-3.5 w-3.5 mr-1" />Editar
+            <Pencil className="h-3.5 w-3.5 sm:mr-1" /><span className="hidden sm:inline">Editar</span>
           </Button>
           <Button variant="destructive" size="sm" onClick={() => onEliminar(row)} title="Eliminar equipo">
-            <Trash2 className="h-3.5 w-3.5 mr-1" />Eliminar
+            <Trash2 className="h-3.5 w-3.5 sm:mr-1" /><span className="hidden sm:inline">Eliminar</span>
           </Button>
           <Button variant="secondary" size="sm" onClick={() => onExportarBarcode(row)} title="Exportar código de barras">
-            <Download className="h-3.5 w-3.5 mr-1" />Exportar
+            <Download className="h-3.5 w-3.5 sm:mr-1" /><span className="hidden sm:inline">Exportar</span>
           </Button>
         </div>
       ),
@@ -280,7 +281,7 @@ export default function EquiposPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
             <Monitor className="h-6 w-6" />
@@ -321,16 +322,21 @@ export default function EquiposPage() {
                 <Input {...register('marca')} />
               </FormField>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <FormField label="Consecutivo" required error={errors.consecutivo?.message}>
                   <Input
                     type="number"
                     inputMode="numeric"
+                    min="1"
                     {...register('consecutivo', { required: 'Consecutivo es requerido' })}
                   />
                 </FormField>
                 <FormField label="Código de inventario" error={errors.codigo_inventario?.message}>
-                  <Input {...register('codigo_inventario')} />
+                  <Input
+                    {...register('codigo_inventario', {
+                      onChange: (e) => e.target.value = soloAlfanumericoConGuion(e.target.value),
+                    })}
+                  />
                 </FormField>
               </div>
 
