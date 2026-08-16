@@ -22,6 +22,7 @@ import {
   useDescartarNotificacionReserva,
 } from '../notificacionesApi';
 import { showSuccess, showError } from '@/shared/utils/alert';
+import { esCorreoValido } from '@/shared/utils/inputValidation';
 import Swal from '@/shared/lib/swal';
 import { AlertTriangle, Mail, Send, Key, CalendarX, Trash2 } from 'lucide-react';
 
@@ -111,13 +112,24 @@ function ComposerSheet({ open, onOpenChange, destinatarios, mode, onEnviar, isPe
     }
     // Verificar que todos tengan correo (original o editado)
     const sinCorreo = destinatarios.filter((p) => {
-      const id = p._id ?? p.id;
+      const id = p.id;
       const correoFinal = correosEditados[id] ?? (mode === 'reservas' ? p.solicitante_correo : p.correo);
       return !correoFinal || !correoFinal.trim();
     });
     if (sinCorreo.length > 0) {
       const nombres = sinCorreo.map((p) => mode === 'reservas' ? p.solicitante_nombre : p.docente).join(', ');
       showError(`Complete el correo de: ${nombres}`);
+      return;
+    }
+    // Verificar que los correos (originales o editados) tengan un formato válido
+    const correoInvalido = destinatarios.filter((p) => {
+      const id = p.id;
+      const correoFinal = correosEditados[id] ?? (mode === 'reservas' ? p.solicitante_correo : p.correo);
+      return !esCorreoValido(correoFinal);
+    });
+    if (correoInvalido.length > 0) {
+      const nombres = correoInvalido.map((p) => mode === 'reservas' ? p.solicitante_nombre : p.docente).join(', ');
+      showError(`Correo con formato inválido: ${nombres}`);
       return;
     }
     const confirm = await Swal.fire({
@@ -154,7 +166,7 @@ function ComposerSheet({ open, onOpenChange, destinatarios, mode, onEnviar, isPe
             </p>
             <div className="max-h-44 overflow-y-auto space-y-2">
               {destinatarios.map((p, i) => {
-                const id = p._id ?? i;
+                const id = p.id ?? i;
                 const correoOriginal = esReservas ? p.solicitante_correo : p.correo;
                 const nombre = esReservas ? p.solicitante_nombre : p.docente;
                 const correoActual = correosEditados[id] !== undefined ? correosEditados[id] : (correoOriginal || '');
@@ -263,7 +275,7 @@ function ComposerSheet({ open, onOpenChange, destinatarios, mode, onEnviar, isPe
           )}
         </div>
 
-        <SheetFooter>
+        <SheetFooter className="flex-wrap">
           <Button variant="outline" onClick={() => handleOpen(false)}>
             Cancelar
           </Button>
@@ -312,11 +324,11 @@ export default function EnviarTab() {
     [seleccionadosLlaves]
   );
   const selLlavesList = useMemo(
-    () => pendientes.filter((p) => seleccionadosLlaves[p._id]),
+    () => pendientes.filter((p) => seleccionadosLlaves[p.id]),
     [pendientes, seleccionadosLlaves]
   );
   const todosLlavesSeleccionados =
-    pendientes.length > 0 && pendientes.every((p) => seleccionadosLlaves[p._id]);
+    pendientes.length > 0 && pendientes.every((p) => seleccionadosLlaves[p.id]);
 
   // ── Reservas: seleccion ──
   const selReservasCount = useMemo(
@@ -324,7 +336,7 @@ export default function EnviarTab() {
     [seleccionadosReservas]
   );
   const selReservasList = useMemo(
-    () => reservasNoReclamadas.filter((r) => seleccionadosReservas[r._id]),
+    () => reservasNoReclamadas.filter((r) => seleccionadosReservas[r.id]),
     [reservasNoReclamadas, seleccionadosReservas]
   );
 
@@ -347,13 +359,13 @@ export default function EnviarTab() {
         destinatarios: destinatariosSheet.map((p) => ({
           nombre: p.docente,
           documento: p.documento,
-          correo: correosEditados[p._id] !== undefined ? correosEditados[p._id] : (p.correo || ''),
+          correo: correosEditados[p.id] !== undefined ? correosEditados[p.id] : (p.correo || ''),
           salon: p.aula,
           fecha_prestamo: p.fechaEntrega && p.horaEntrega
             ? `${p.fechaEntrega}T${p.horaEntrega}`
             : p.fechaEntrega || '',
           tiempo_transcurrido: calcularTiempoTranscurrido(p.fechaEntrega, p.horario),
-          llave_id: p._id,
+          llave_id: p.id,
         })),
         tipo_mensaje: tipoMensaje,
         mensaje_personalizado: tipoMensaje === 'personalizado' ? mensajePersonalizado : '',
@@ -385,7 +397,7 @@ export default function EnviarTab() {
     });
     if (!result.isConfirmed) return;
     try {
-      await descartarReserva(row._id);
+      await descartarReserva(row.id);
       showSuccess('Notificación descartada');
     } catch (err) {
       showError(err.response?.data?.message || 'No se pudo descartar');
@@ -396,7 +408,7 @@ export default function EnviarTab() {
   async function onEnviarReservas({ tipoMensaje, asunto, mensajePersonalizado }) {
     try {
       const payload = {
-        reserva_ids: destinatariosSheet.map((r) => r._id),
+        reserva_ids: destinatariosSheet.map((r) => r.id),
         tipo_mensaje: tipoMensaje,
         mensaje_personalizado: tipoMensaje === 'personalizado' ? mensajePersonalizado : '',
         asunto,
@@ -426,7 +438,7 @@ export default function EnviarTab() {
               setSeleccionadosLlaves({});
             } else {
               const next = {};
-              pendientes.forEach((p) => { next[p._id] = true; });
+              pendientes.forEach((p) => { next[p.id] = true; });
               setSeleccionadosLlaves(next);
             }
           }}
@@ -436,8 +448,8 @@ export default function EnviarTab() {
       render: (_, row) => (
         <input
           type="checkbox"
-          checked={!!seleccionadosLlaves[row._id]}
-          onChange={(e) => { e.stopPropagation(); setSeleccionadosLlaves((prev) => ({ ...prev, [row._id]: !prev[row._id] })); }}
+          checked={!!seleccionadosLlaves[row.id]}
+          onChange={(e) => { e.stopPropagation(); setSeleccionadosLlaves((prev) => ({ ...prev, [row.id]: !prev[row.id] })); }}
           className="h-4 w-4 rounded border-border accent-primary"
         />
       ),
@@ -465,7 +477,7 @@ export default function EnviarTab() {
         const config = configs.find((c) => c.nombre_bloque === bloque)
           || configs.find((c) => c.nombre_bloque === `BLOQUE ${bloque}`)
           || { max_recordatorios: null };
-        const enviados = contadores[row._id] ?? 0;
+        const enviados = contadores[row.id] ?? 0;
         const max = config.max_recordatorios ?? '?';
         const variant = max === '?' ? 'neutral'
           : enviados >= max ? 'danger'
@@ -508,14 +520,14 @@ export default function EnviarTab() {
       label: (
         <input
           type="checkbox"
-          checked={reservasNoReclamadas.length > 0 && reservasNoReclamadas.every((r) => seleccionadosReservas[r._id])}
+          checked={reservasNoReclamadas.length > 0 && reservasNoReclamadas.every((r) => seleccionadosReservas[r.id])}
           onChange={() => {
-            const allSel = reservasNoReclamadas.every((r) => seleccionadosReservas[r._id]);
+            const allSel = reservasNoReclamadas.every((r) => seleccionadosReservas[r.id]);
             if (allSel) {
               setSeleccionadosReservas({});
             } else {
               const next = {};
-              reservasNoReclamadas.forEach((r) => { next[r._id] = true; });
+              reservasNoReclamadas.forEach((r) => { next[r.id] = true; });
               setSeleccionadosReservas(next);
             }
           }}
@@ -525,8 +537,8 @@ export default function EnviarTab() {
       render: (_, row) => (
         <input
           type="checkbox"
-          checked={!!seleccionadosReservas[row._id]}
-          onChange={(e) => { e.stopPropagation(); setSeleccionadosReservas((prev) => ({ ...prev, [row._id]: !prev[row._id] })); }}
+          checked={!!seleccionadosReservas[row.id]}
+          onChange={(e) => { e.stopPropagation(); setSeleccionadosReservas((prev) => ({ ...prev, [row.id]: !prev[row.id] })); }}
           className="h-4 w-4 rounded border-border accent-primary"
         />
       ),
@@ -559,7 +571,7 @@ export default function EnviarTab() {
     <div className="space-y-8">
       {/* ── Seccion: Prestamos de llaves ── */}
       <section className="space-y-3">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-2">
             <Key className="h-5 w-5 text-muted-foreground" />
             <h2 className="font-semibold text-base text-foreground">Prestamos de llaves pendientes</h2>
@@ -589,7 +601,7 @@ export default function EnviarTab() {
 
       {/* ── Seccion: Reservas sin reclamar ── */}
       <section className="space-y-3">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-2">
             <CalendarX className="h-5 w-5 text-muted-foreground" />
             <h2 className="font-semibold text-base text-foreground">Reservas sin reclamar</h2>

@@ -1,14 +1,12 @@
 import { useState } from 'react';
-import { Bell, Send, Clock, Settings } from 'lucide-react';
+import { Bell, Send, Clock } from 'lucide-react';
 import EnviarTab from './tabs/EnviarTab';
 import HistorialTab from './tabs/HistorialTab';
-import ConfiguracionTab from './tabs/ConfiguracionTab';
 import { useEstadisticasNotificaciones } from './notificacionesApi';
 
 const TABS = [
   { id: 'enviar', label: 'Enviar', icon: Send },
   { id: 'historial', label: 'Historial', icon: Clock },
-  { id: 'configuracion', label: 'Configuración', icon: Settings },
 ];
 
 export default function NotificacionesPage() {
@@ -53,7 +51,6 @@ export default function NotificacionesPage() {
       <div>
         {activeTab === 'enviar' && <EnviarTab />}
         {activeTab === 'historial' && <HistorialTab />}
-        {activeTab === 'configuracion' && <ConfiguracionTab />}
       </div>
     </div>
   );

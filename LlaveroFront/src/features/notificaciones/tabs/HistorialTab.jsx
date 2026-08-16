@@ -47,7 +47,7 @@ export default function HistorialTab() {
     });
     if (!result.isConfirmed) return;
     try {
-      await reenviar.mutateAsync(row._id);
+      await reenviar.mutateAsync(row.id);
       Swal.fire({ icon: 'success', title: 'Reenviado', timer: 1800, showConfirmButton: false });
     } catch (err) {
       Swal.fire({ icon: 'error', title: 'Error', text: err.response?.data?.message ?? 'No se pudo reenviar' });
@@ -106,7 +106,7 @@ export default function HistorialTab() {
 
   async function handleDescartar(row) {
     try {
-      await descartar.mutateAsync(row._id);
+      await descartar.mutateAsync(row.id);
       Swal.fire({ icon: 'success', title: 'Descartada', timer: 1500, showConfirmButton: false });
     } catch (err) {
       Swal.fire({ icon: 'error', title: 'Error', text: err.response?.data?.message ?? 'No se pudo descartar' });
