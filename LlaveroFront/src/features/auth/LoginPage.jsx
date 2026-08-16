@@ -4,9 +4,10 @@ import { z } from 'zod';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from './authStore';
-import { Mail } from 'lucide-react';
+import { Mail, Sun, Moon } from 'lucide-react';
 import Button from '@/shared/components/ui/Button';
 import { FormField, Input } from '@/shared/components/ui/FormField';
+import { useTheme } from '@/shared/components/ThemeProvider';
 
 const loginSchema = z.object({
   email: z
@@ -21,6 +22,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { isAuthenticated, isHydrating, hasHydrated, token, refreshToken, restoreSession } = useAuthStore();
+  const { theme, setTheme } = useTheme();
 
   useEffect(() => {
     if (hasHydrated && !token && refreshToken) {
@@ -61,7 +63,16 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-muted/40 p-4 sm:p-6">
+    <div className="relative min-h-screen flex items-center justify-center bg-muted/40 p-4 sm:p-6">
+      <button
+        type="button"
+        onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+        title={theme === 'dark' ? 'Modo claro' : 'Modo oscuro'}
+        className="absolute top-4 right-4 p-2 rounded-lg text-muted-foreground hover:bg-muted transition-colors"
+      >
+        {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+      </button>
+
       <div className="w-full max-w-md">
         <div className="rounded-xl bg-card shadow-xl border border-border border-t-4 border-t-primary overflow-hidden">
           <div className="px-6 sm:px-10 pt-10 pb-8">
