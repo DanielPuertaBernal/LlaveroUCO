@@ -7,6 +7,8 @@ import {
   useRegistrarNovedad,
 } from './novedadesApi';
 import { useTodosPendientes } from '@/features/llaves/llavesApi';
+import { useEquipos } from '@/features/equipos/equiposApi';
+import { useSalones } from '@/features/salones/salonesApi';
 import { useAuthStore } from '@/features/auth/authStore';
 import Swal from '@/shared/lib/swal';
 import { AlertTriangle, CheckCircle, Clock, XCircle, PlusCircle, Trash2 } from 'lucide-react';
@@ -14,6 +16,8 @@ import StatusBadge from '@/shared/components/ui/StatusBadge';
 import { FormField, Input, Select } from '@/shared/components/ui/FormField';
 import Button from '@/shared/components/ui/Button';
 import { ROLES } from '@/shared/constants';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/shared/components/ui/Sheet';
+import { sinHTML } from '@/shared/utils/inputValidation';
 
 const CATEGORIAS = {
   sin_novedad: 'Sin novedad',
@@ -28,7 +32,6 @@ const ESTADOS = {
   abierta: { label: 'Abierta', variant: 'danger' },
   en_revision: { label: 'En revisión', variant: 'warning' },
   resuelta: { label: 'Resuelta', variant: 'success' },
-  cerrada: { label: 'Cerrada', variant: 'default' },
 };
 
 export default function NovedadesPage() {
@@ -39,13 +42,19 @@ export default function NovedadesPage() {
     busqueda: '',
   });
   const [showRegistrar, setShowRegistrar] = useState(false);
+  const [tipoNovedad, setTipoNovedad] = useState('general');
   const [busquedaPrestamo, setBusquedaPrestamo] = useState('');
   const [prestamoSeleccionado, setPrestamoSeleccionado] = useState(null);
+  const [busquedaEquipo, setBusquedaEquipo] = useState('');
+  const [equipoSeleccionado, setEquipoSeleccionado] = useState(null);
+  const [salonGeneral, setSalonGeneral] = useState('');
   const [nuevaNovedad, setNuevaNovedad] = useState({ categoria: '', descripcion: '' });
 
   const { data: novedades = [], isLoading } = useNovedades(filters);
   const { data: stats } = useEstadisticasNovedades();
   const { data: pendientesLlaves = [] } = useTodosPendientes();
+  const { data: equipos = [] } = useEquipos();
+  const { data: salones = [] } = useSalones();
   const actualizarEstado = useActualizarEstadoNovedad();
   const registrarNovedad = useRegistrarNovedad();
   const usuario = useAuthStore((s) => s.usuario);
@@ -61,21 +70,49 @@ export default function NovedadesPage() {
     );
   });
 
+  const equiposFiltrados = equipos.filter((eq) => {
+    if (!busquedaEquipo) return true;
+    const q = busquedaEquipo.toLowerCase();
+    return (
+      (eq.nombre || '').toLowerCase().includes(q) ||
+      (eq.codigo_inventario || '').toLowerCase().includes(q) ||
+      (eq.marca || '').toLowerCase().includes(q)
+    );
+  });
+
+  function limpiarFormularioRegistro() {
+    setTipoNovedad('general');
+    setBusquedaPrestamo('');
+    setPrestamoSeleccionado(null);
+    setBusquedaEquipo('');
+    setEquipoSeleccionado(null);
+    setSalonGeneral('');
+    setNuevaNovedad({ categoria: '', descripcion: '' });
+  }
+
   async function handleRegistrarNovedad() {
-    if (!prestamoSeleccionado) return Swal.fire({ icon: 'warning', title: 'Selecciona un préstamo activo' });
     if (!nuevaNovedad.categoria) return Swal.fire({ icon: 'warning', title: 'Selecciona una categoría' });
+    if (!nuevaNovedad.descripcion.trim()) return Swal.fire({ icon: 'warning', title: 'La descripción es requerida' });
+
+    const payload = { categoria: nuevaNovedad.categoria, descripcion: nuevaNovedad.descripcion };
+    if (tipoNovedad === 'llave') {
+      if (!prestamoSeleccionado) return Swal.fire({ icon: 'warning', title: 'Selecciona un préstamo activo' });
+      payload.tipo_recurso = 'llave';
+      payload.recurso_id = prestamoSeleccionado.id;
+      payload.salon = prestamoSeleccionado.aula;
+    } else if (tipoNovedad === 'equipo') {
+      if (!equipoSeleccionado) return Swal.fire({ icon: 'warning', title: 'Selecciona un equipo' });
+      payload.tipo_recurso = 'equipo';
+      payload.recurso_id = equipoSeleccionado.id;
+    } else {
+      payload.tipo_recurso = 'general';
+      payload.salon = salonGeneral;
+    }
+
     try {
-      await registrarNovedad.mutateAsync({
-        tipo_recurso: 'llave',
-        salon: prestamoSeleccionado.aula,
-        referencia_id: prestamoSeleccionado._id,
-        categoria: nuevaNovedad.categoria,
-        descripcion: nuevaNovedad.descripcion,
-      });
+      await registrarNovedad.mutateAsync(payload);
       Swal.fire({ icon: 'success', title: 'Novedad registrada', timer: 1500, showConfirmButton: false });
-      setPrestamoSeleccionado(null);
-      setNuevaNovedad({ categoria: '', descripcion: '' });
-      setBusquedaPrestamo('');
+      limpiarFormularioRegistro();
       setShowRegistrar(false);
     } catch (err) {
       Swal.fire({ icon: 'error', title: 'Error', text: err.response?.data?.message ?? 'No se pudo registrar' });
@@ -96,7 +133,6 @@ export default function NovedadesPage() {
             <option value="abierta" ${row.estado === 'abierta' ? 'selected' : ''}>Abierta</option>
             <option value="en_revision" ${row.estado === 'en_revision' ? 'selected' : ''}>En revisión</option>
             <option value="resuelta" ${row.estado === 'resuelta' ? 'selected' : ''}>Resuelta</option>
-            <option value="cerrada" ${row.estado === 'cerrada' ? 'selected' : ''}>Cerrada</option>
           </select>
           <label style="display:block;font-weight:600;margin:10px 0 4px">Resolución (opcional)</label>
           <textarea id="swal-resolucion" class="swal2-textarea" style="width:100%;margin:0" placeholder="Notas de resolución...">${row.resolucion || ''}</textarea>
@@ -113,7 +149,7 @@ export default function NovedadesPage() {
     });
     if (!formValues) return;
     try {
-      await actualizarEstado.mutateAsync({ id: row._id, ...formValues });
+      await actualizarEstado.mutateAsync({ id: row.id, ...formValues });
       Swal.fire({ icon: 'success', title: 'Estado actualizado', timer: 1500, showConfirmButton: false });
     } catch (err) {
       Swal.fire({ icon: 'error', title: 'Error', text: err.response?.data?.message ?? 'No se pudo actualizar' });
@@ -147,7 +183,11 @@ export default function NovedadesPage() {
       label: 'Fecha',
       render: (v) => v ? new Date(v).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' }) : '—',
     },
-    { key: 'tipo_recurso', label: 'Tipo', render: (v) => v === 'llave' ? 'Llave' : 'Equipo' },
+    {
+      key: 'tipo_recurso',
+      label: 'Tipo',
+      render: (v) => (v === 'llave' ? 'Llave' : v === 'equipo' ? 'Equipo' : 'General'),
+    },
     { key: 'salon', label: 'Salón' },
     { key: 'categoria', label: 'Categoría', render: (v) => CATEGORIAS[v] || v },
     { key: 'reportado_por_nombre', label: 'Reportado por' },
@@ -157,7 +197,7 @@ export default function NovedadesPage() {
       render: (v, row) => {
         const { label, variant } = ESTADOS[v] || { label: v, variant: 'default' };
         const badge = <StatusBadge variant={variant}>{label}</StatusBadge>;
-        if (isAdmin && v !== 'cerrada') {
+        if (isAdmin) {
           return (
             <button
               title="Cambiar estado"
@@ -183,51 +223,130 @@ export default function NovedadesPage() {
           </h1>
           <p className="text-muted-foreground text-sm">Incidencias reportadas en llaves y equipos</p>
         </div>
-        <Button onClick={() => setShowRegistrar((v) => !v)} variant={showRegistrar ? 'outline' : 'default'}>
+        <Button onClick={() => setShowRegistrar(true)}>
           <PlusCircle className="h-4 w-4 mr-1" />
-          {showRegistrar ? 'Cerrar' : 'Registrar novedad'}
+          Registrar novedad
         </Button>
       </div>
 
-      {/* Sección registro manual */}
-      {showRegistrar && (
-        <div className="bg-card border-2 border-primary/30 rounded-lg p-5 space-y-4">
-          <h2 className="font-semibold text-foreground">Registrar novedad sobre préstamo de llave activo</h2>
-          <FormField label="Buscar préstamo (documento, nombre, salón)">
-            <Input
-              value={busquedaPrestamo}
-              onChange={(e) => { setBusquedaPrestamo(e.target.value); setPrestamoSeleccionado(null); }}
-              placeholder="Ej: 1234567890, Prof. García, A-301"
-            />
+      <Sheet open={showRegistrar} onOpenChange={(open) => { if (!open) setShowRegistrar(false); }}>
+        <SheetContent>
+          <SheetHeader>
+            <SheetTitle>Registrar novedad</SheetTitle>
+          </SheetHeader>
+
+          <FormField label="¿Sobre qué es la novedad?">
+            <Select
+              value={tipoNovedad}
+              onChange={(e) => {
+                setTipoNovedad(e.target.value);
+                setPrestamoSeleccionado(null);
+                setBusquedaPrestamo('');
+                setEquipoSeleccionado(null);
+                setBusquedaEquipo('');
+                setSalonGeneral('');
+              }}
+            >
+              <option value="general">Salón / otro (no vinculado a un préstamo o equipo)</option>
+              <option value="llave">Llave prestada actualmente</option>
+              <option value="equipo">Un equipo del inventario</option>
+            </Select>
           </FormField>
 
-          {busquedaPrestamo && (
-            <div className="max-h-40 overflow-y-auto border border-border rounded-lg">
-              {pendientesFiltrados.length === 0 && (
-                <p className="text-sm text-muted-foreground p-3 text-center">No hay préstamos activos con esa búsqueda</p>
+          {tipoNovedad === 'llave' && (
+            <>
+              <FormField label="Buscar préstamo activo (documento, nombre, salón)">
+                <Input
+                  value={busquedaPrestamo}
+                  onChange={(e) => { setBusquedaPrestamo(e.target.value); setPrestamoSeleccionado(null); }}
+                  placeholder="Ej: 1234567890, Prof. García, A-301"
+                />
+              </FormField>
+              {busquedaPrestamo && !prestamoSeleccionado && (
+                <div className="max-h-40 overflow-y-auto border border-border rounded-lg">
+                  {pendientesFiltrados.length === 0 && (
+                    <p className="text-sm text-muted-foreground p-3 text-center">No hay préstamos activos con esa búsqueda</p>
+                  )}
+                  {pendientesFiltrados.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => { setPrestamoSeleccionado(p); setBusquedaPrestamo(p.profesor || p.aula || ''); }}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-accent transition-colors border-b border-border last:border-0"
+                    >
+                      <span className="font-medium">{p.profesor || '—'}</span>
+                      {' '}<span className="text-muted-foreground">({p.nroidenti})</span>
+                      {' — '}<span>{p.aula}</span>
+                    </button>
+                  ))}
+                </div>
               )}
-              {pendientesFiltrados.map((p) => (
-                <button
-                  key={p._id}
-                  type="button"
-                  onClick={() => { setPrestamoSeleccionado(p); setBusquedaPrestamo(p.profesor || p.aula || ''); }}
-                  className={`w-full text-left px-3 py-2 text-sm hover:bg-accent transition-colors border-b border-border last:border-0 ${
-                    prestamoSeleccionado?._id === p._id ? 'bg-primary/10 font-semibold' : ''
-                  }`}
-                >
-                  <span className="font-medium">{p.profesor || '—'}</span>
-                  {' '}<span className="text-muted-foreground">({p.nroidenti})</span>
-                  {' — '}<span>{p.aula}</span>
-                </button>
-              ))}
-            </div>
+              {prestamoSeleccionado && (
+                <p className="text-sm text-foreground">
+                  Préstamo seleccionado: <b>{prestamoSeleccionado.profesor}</b> — {prestamoSeleccionado.aula}
+                </p>
+              )}
+            </>
           )}
 
-          {prestamoSeleccionado && (
+          {tipoNovedad === 'equipo' && (
+            <>
+              <FormField label="Buscar equipo (nombre, código, marca)">
+                <Input
+                  value={busquedaEquipo}
+                  onChange={(e) => { setBusquedaEquipo(e.target.value); setEquipoSeleccionado(null); }}
+                  placeholder="Ej: Videobeam, INV-045, Epson"
+                />
+              </FormField>
+              {busquedaEquipo && !equipoSeleccionado && (
+                <div className="max-h-40 overflow-y-auto border border-border rounded-lg">
+                  {equiposFiltrados.length === 0 && (
+                    <p className="text-sm text-muted-foreground p-3 text-center">No hay equipos con esa búsqueda</p>
+                  )}
+                  {equiposFiltrados.map((eq) => (
+                    <button
+                      key={eq.id}
+                      type="button"
+                      onClick={() => { setEquipoSeleccionado(eq); setBusquedaEquipo(eq.nombre || ''); }}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-accent transition-colors border-b border-border last:border-0"
+                    >
+                      <span className="font-medium">{eq.nombre}</span>
+                      {' '}<span className="text-muted-foreground">({eq.codigo_inventario})</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {equipoSeleccionado && (
+                <p className="text-sm text-foreground">
+                  Equipo seleccionado: <b>{equipoSeleccionado.nombre}</b> ({equipoSeleccionado.codigo_inventario})
+                </p>
+              )}
+            </>
+          )}
+
+          {tipoNovedad === 'general' && (
+            <FormField label="Ubicación (opcional)">
+              <Input
+                list="novedad-salones-list"
+                value={salonGeneral}
+                onChange={(e) => setSalonGeneral(e.target.value)}
+                placeholder="Ej: M210, J4, Bloque J..."
+              />
+              <datalist id="novedad-salones-list">
+                {salonGeneral.trim() &&
+                  salones
+                    .filter((s) => s.nombre_salon.toLowerCase().includes(salonGeneral.trim().toLowerCase()))
+                    .map((s) => (
+                      <option key={s.id} value={s.nombre_salon}>{s.nombre_bloque}</option>
+                    ))}
+              </datalist>
+            </FormField>
+          )}
+
+          {(tipoNovedad === 'general' ||
+            (tipoNovedad === 'llave' && prestamoSeleccionado) ||
+            (tipoNovedad === 'equipo' && equipoSeleccionado)) && (
             <div className="space-y-3 pt-2 border-t border-border">
-              <p className="text-sm text-foreground">
-                Préstamo seleccionado: <b>{prestamoSeleccionado.profesor}</b> — {prestamoSeleccionado.aula}
-              </p>
               <FormField label="Categoría">
                 <Select
                   value={nuevaNovedad.categoria}
@@ -241,10 +360,10 @@ export default function NovedadesPage() {
                   <option value="demora_entrega">Demora en entrega de llave</option>
                 </Select>
               </FormField>
-              <FormField label="Descripción (opcional)">
+              <FormField label="Descripción">
                 <Input
                   value={nuevaNovedad.descripcion}
-                  onChange={(e) => setNuevaNovedad((n) => ({ ...n, descripcion: e.target.value }))}
+                  onChange={(e) => setNuevaNovedad((n) => ({ ...n, descripcion: sinHTML(e.target.value) }))}
                   placeholder="Detalle la novedad..."
                 />
               </FormField>
@@ -252,14 +371,14 @@ export default function NovedadesPage() {
                 <Button onClick={handleRegistrarNovedad} disabled={registrarNovedad.isPending}>
                   {registrarNovedad.isPending ? 'Registrando...' : 'Registrar novedad'}
                 </Button>
-                <Button variant="outline" onClick={() => { setPrestamoSeleccionado(null); setNuevaNovedad({ categoria: '', descripcion: '' }); }}>
+                <Button variant="outline" onClick={limpiarFormularioRegistro}>
                   Limpiar
                 </Button>
               </div>
             </div>
           )}
-        </div>
-      )}
+        </SheetContent>
+      </Sheet>
 
       {/* Estadísticas */}
       {stats && (
@@ -312,6 +431,7 @@ export default function NovedadesPage() {
             <option value="">Todos</option>
             <option value="llave">Llave</option>
             <option value="equipo">Equipo</option>
+            <option value="general">General</option>
           </Select>
         </FormField>
         <FormField label="Estado">
@@ -323,7 +443,6 @@ export default function NovedadesPage() {
             <option value="abierta">Abierta</option>
             <option value="en_revision">En revisión</option>
             <option value="resuelta">Resuelta</option>
-            <option value="cerrada">Cerrada</option>
           </Select>
         </FormField>
         <FormField label="Categoría">

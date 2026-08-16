@@ -41,7 +41,13 @@ class NovedadRepository {
       .whereNull(`${TABLES.NOVEDADES}.deleted_at`)
       .select(
         `${TABLES.NOVEDADES}.*`,
-        this.db.raw(`CASE WHEN ${TABLES.NOVEDADES}.llave_id IS NOT NULL THEN 'llave' ELSE 'equipo' END as tipo_recurso`),
+        this.db.raw(`
+          CASE
+            WHEN ${TABLES.NOVEDADES}.llave_id IS NOT NULL THEN 'llave'
+            WHEN ${TABLES.NOVEDADES}.equipo_id IS NOT NULL THEN 'equipo'
+            ELSE 'general'
+          END as tipo_recurso
+        `),
         this.db.raw(`coalesce(${TABLES.NOVEDADES}.llave_id, ${TABLES.NOVEDADES}.equipo_id) as recurso_id`)
       );
   }
@@ -60,6 +66,11 @@ class NovedadRepository {
       } else if (data.tipo_recurso === 'equipo') {
         payload.equipo_id = data.recurso_id || null;
         payload.llave_id = null;
+      } else {
+        // 'general': novedad sin llave/equipo vinculado (ej. daño a un
+        // salón/frontón sin préstamo activo involucrado).
+        payload.llave_id = null;
+        payload.equipo_id = null;
       }
     }
 
@@ -120,6 +131,9 @@ class NovedadRepository {
     const query = this._readQuery();
     if (filters.tipo_recurso === 'llave') query.whereNotNull(`${TABLES.NOVEDADES}.llave_id`);
     if (filters.tipo_recurso === 'equipo') query.whereNotNull(`${TABLES.NOVEDADES}.equipo_id`);
+    if (filters.tipo_recurso === 'general') {
+      query.whereNull(`${TABLES.NOVEDADES}.llave_id`).whereNull(`${TABLES.NOVEDADES}.equipo_id`);
+    }
     if (filters.estado) query.andWhere(`${TABLES.NOVEDADES}.estado`, filters.estado);
     if (filters.categoria) query.andWhere(`${TABLES.NOVEDADES}.categoria`, filters.categoria);
     if (filters.reportado_por) query.andWhere(`${TABLES.NOVEDADES}.reportado_por`, filters.reportado_por);
@@ -143,11 +157,18 @@ class NovedadRepository {
       this.db(TABLES.NOVEDADES).whereNull('deleted_at').groupBy('estado').select('estado').count({ total: '*' }),
       this.db(TABLES.NOVEDADES).whereNull('deleted_at').groupBy('categoria').select('categoria').count({ total: '*' }),
     ]);
+    const tipoRecursoCase = `
+      CASE
+        WHEN llave_id IS NOT NULL THEN 'llave'
+        WHEN equipo_id IS NOT NULL THEN 'equipo'
+        ELSE 'general'
+      END
+    `;
     const porTipoRows = await this.db(TABLES.NOVEDADES)
       .whereNull('deleted_at')
-      .select(this.db.raw("CASE WHEN llave_id IS NOT NULL THEN 'llave' ELSE 'equipo' END as tipo_recurso"))
+      .select(this.db.raw(`${tipoRecursoCase} as tipo_recurso`))
       .count({ total: '*' })
-      .groupByRaw("CASE WHEN llave_id IS NOT NULL THEN 'llave' ELSE 'equipo' END");
+      .groupByRaw(tipoRecursoCase);
 
     const mapReduce = (arr, key) => arr.reduce((acc, r) => ({ ...acc, [r[key]]: Number(r.total) }), {});
     return {

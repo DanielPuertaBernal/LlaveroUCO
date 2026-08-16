@@ -8,18 +8,18 @@ const { validate } = require('../../shared/middlewares/validate.middleware');
 const router = Router();
 
 const registrarNovedadSchema = z.object({
-  tipo_recurso: z.enum(['llave', 'equipo']),
+  tipo_recurso: z.enum(['llave', 'equipo', 'general']),
   recurso_id: z.string().optional().default(''),
   prestamo_ref: z.string().optional().default(''),
   reportado_por: z.string().optional().default(''),
   reportado_por_nombre: z.string().optional().default(''),
   salon: z.string().optional().default(''),
   categoria: z.enum(['sin_novedad', 'daño_fisico', 'no_funciona', 'perdida', 'otro', 'demora_entrega']),
-  descripcion: z.string().max(500).optional().default(''),
+  descripcion: z.string().trim().min(1, 'La descripción es requerida').max(500),
 });
 
 const actualizarEstadoSchema = z.object({
-  estado: z.enum(['abierta', 'en_revision', 'resuelta', 'cerrada']),
+  estado: z.enum(['abierta', 'en_revision', 'resuelta']),
   resolucion: z.string().max(500).optional(),
 });
 
@@ -87,7 +87,7 @@ router.post(
  *         name: estado
  *         schema:
  *           type: string
- *           enum: [abierta, en_revision, resuelta, cerrada]
+ *           enum: [abierta, en_revision, resuelta]
  *       - in: query
  *         name: categoria
  *         schema:
@@ -210,7 +210,7 @@ router.get(
  *             properties:
  *               estado:
  *                 type: string
- *                 enum: [abierta, en_revision, resuelta, cerrada]
+ *                 enum: [abierta, en_revision, resuelta]
  *               resolucion:
  *                 type: string
  *                 maxLength: 500

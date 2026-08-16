@@ -37,7 +37,7 @@ class NovedadService {
 
     const updates = { estado };
     if (resolucion !== undefined) updates.resolucion = resolucion;
-    if (estado === 'resuelta' || estado === 'cerrada') {
+    if (estado === 'resuelta') {
       updates.fecha_resolucion = new Date();
     }
 
