@@ -55,7 +55,7 @@ class NovedadRepository {
   /** Traduce el payload de negocio (tipo_recurso/recurso_id, reportado_por, salon) a las columnas reales. */
   async _buildPayload(data) {
     const payload = {};
-    for (const col of ['categoria', 'descripcion', 'estado', 'resolucion', 'fecha_resolucion', 'notificacion_admin_enviada', 'reportado_por_nombre']) {
+    for (const col of ['categoria', 'descripcion', 'estado', 'resolucion', 'fecha_resolucion', 'notificacion_admin_enviada', 'reportado_por_nombre', 'en_revision_por', 'en_revision_en', 'resuelto_por']) {
       if (data[col] !== undefined) payload[col] = data[col];
     }
 

@@ -33,7 +33,8 @@ class NovedadController {
 
   async actualizarEstado(req, res) {
     const { estado, resolucion } = req.body;
-    const novedad = await novedadService.actualizarEstado(req.params.id, estado, resolucion);
+    const actor = { nombre: req.user?.nombre || req.user?.usuario || '' };
+    const novedad = await novedadService.actualizarEstado(req.params.id, estado, resolucion, actor);
     return res.json({ ok: true, data: novedad });
   }
 

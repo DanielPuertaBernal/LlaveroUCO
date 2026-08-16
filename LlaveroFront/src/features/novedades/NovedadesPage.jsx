@@ -34,6 +34,10 @@ const ESTADOS = {
   resuelta: { label: 'Resuelta', variant: 'success' },
 };
 
+// Una novedad solo puede avanzar (abierta → en_revision → resuelta), nunca
+// retroceder — mismo orden que valida el backend (novedad.service.js).
+const RANGO_ESTADO = { abierta: 0, en_revision: 1, resuelta: 2 };
+
 export default function NovedadesPage() {
   const [filters, setFilters] = useState({
     tipo_recurso: '',
@@ -120,6 +124,12 @@ export default function NovedadesPage() {
   }
 
   async function handleCambiarEstado(row) {
+    const rangoActual = RANGO_ESTADO[row.estado] ?? 0;
+    const opcionesEstado = Object.entries(ESTADOS)
+      .filter(([valor]) => RANGO_ESTADO[valor] >= rangoActual)
+      .map(([valor, { label }]) => `<option value="${valor}" ${row.estado === valor ? 'selected' : ''}>${label}</option>`)
+      .join('');
+
     const { value: formValues } = await Swal.fire({
       title: 'Actualizar estado',
       html: `
@@ -130,11 +140,10 @@ export default function NovedadesPage() {
           <hr style="margin:10px 0"/>
           <label style="display:block;font-weight:600;margin-bottom:4px">Nuevo estado</label>
           <select id="swal-estado" class="swal2-input" style="width:100%;margin:0">
-            <option value="abierta" ${row.estado === 'abierta' ? 'selected' : ''}>Abierta</option>
-            <option value="en_revision" ${row.estado === 'en_revision' ? 'selected' : ''}>En revisión</option>
-            <option value="resuelta" ${row.estado === 'resuelta' ? 'selected' : ''}>Resuelta</option>
+            ${opcionesEstado}
           </select>
-          <label style="display:block;font-weight:600;margin:10px 0 4px">Resolución (opcional)</label>
+          <p style="font-size:12px;color:#888;margin:4px 0 0">Una novedad no puede regresar a un estado anterior.</p>
+          <label style="display:block;font-weight:600;margin:10px 0 4px">Resolución<span style="color:#dc2626"> *</span></label>
           <textarea id="swal-resolucion" class="swal2-textarea" style="width:100%;margin:0" placeholder="Notas de resolución...">${row.resolucion || ''}</textarea>
         </div>
       `,
@@ -142,10 +151,15 @@ export default function NovedadesPage() {
       showCancelButton: true,
       confirmButtonText: 'Guardar',
       cancelButtonText: 'Cancelar',
-      preConfirm: () => ({
-        estado: document.getElementById('swal-estado').value,
-        resolucion: document.getElementById('swal-resolucion').value,
-      }),
+      preConfirm: () => {
+        const estado = document.getElementById('swal-estado').value;
+        const resolucion = document.getElementById('swal-resolucion').value.trim();
+        if (!resolucion) {
+          Swal.showValidationMessage('La resolución es obligatoria');
+          return false;
+        }
+        return { estado, resolucion };
+      },
     });
     if (!formValues) return;
     try {
@@ -157,19 +171,31 @@ export default function NovedadesPage() {
   }
 
   function abrirDetalles(row) {
+    const campo = (label, valor) => `<div><b>${label}:</b> ${valor}</div>`;
+    const formatoFecha = (v) => new Date(v).toLocaleString('es-CO', {
+      day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
+    });
     Swal.fire({
       title: 'Detalle de novedad',
+      width: 640,
       html: `
         <div style="text-align:left;font-size:14px;line-height:1.9">
-          <b>Tipo recurso:</b> ${row.tipo_recurso}<br/>
-          <b>Salón:</b> ${row.salon || '—'}<br/>
-          <b>Categoría:</b> ${CATEGORIAS[row.categoria] || row.categoria}<br/>
-          <b>Descripción:</b> ${row.descripcion || '—'}<br/>
-          <b>Reportado por:</b> ${row.reportado_por_nombre} (${row.reportado_por})<br/>
-          <b>Estado:</b> ${ESTADOS[row.estado]?.label || row.estado}<br/>
-          ${row.resolucion ? `<b>Resolución:</b> ${row.resolucion}<br/>` : ''}
-          <b>Fecha reporte:</b> ${new Date(row.fecha_reporte).toLocaleString('es-CO')}<br/>
-          ${row.fecha_resolucion ? `<b>Fecha resolución:</b> ${new Date(row.fecha_resolucion).toLocaleString('es-CO')}<br/>` : ''}
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 24px">
+            ${campo('Tipo recurso', row.tipo_recurso)}
+            ${campo('Lugar', row.salon || '—')}
+            ${campo('Categoría', CATEGORIAS[row.categoria] || row.categoria)}
+            ${campo('Estado', ESTADOS[row.estado]?.label || row.estado)}
+            ${campo('Reportado por', `${row.reportado_por_nombre}${row.reportado_por ? ` (${row.reportado_por})` : ''}`)}
+            ${campo('Fecha reporte', formatoFecha(row.fecha_reporte))}
+            ${row.en_revision_por ? campo('En revisión por', row.en_revision_por) : ''}
+            ${row.en_revision_en ? campo('Fecha de revisión', formatoFecha(row.en_revision_en)) : ''}
+            ${row.resuelto_por ? campo('Resuelto por', row.resuelto_por) : ''}
+            ${row.fecha_resolucion ? campo('Fecha resolución', formatoFecha(row.fecha_resolucion)) : ''}
+          </div>
+          <div style="margin-top:10px">
+            ${campo('Descripción', row.descripcion || '—')}
+            ${row.resolucion ? campo('Resolución', row.resolucion) : ''}
+          </div>
         </div>
       `,
       icon: 'info',
@@ -188,7 +214,7 @@ export default function NovedadesPage() {
       label: 'Tipo',
       render: (v) => (v === 'llave' ? 'Llave' : v === 'equipo' ? 'Equipo' : 'General'),
     },
-    { key: 'salon', label: 'Salón' },
+    { key: 'salon', label: 'Lugar' },
     { key: 'categoria', label: 'Categoría', render: (v) => CATEGORIAS[v] || v },
     { key: 'reportado_por_nombre', label: 'Reportado por' },
     {
@@ -474,6 +500,8 @@ export default function NovedadesPage() {
         data={novedades}
         loading={isLoading}
         searchable
+        exportable
+        exportFileName="novedades"
         onRowClick={abrirDetalles}
       />
       <p className="text-xs text-muted-foreground text-center">
