@@ -25,9 +25,12 @@ import { showSuccess, showError } from '@/shared/utils/alert';
 import { esCorreoValido } from '@/shared/utils/inputValidation';
 import Swal from '@/shared/lib/swal';
 import { AlertTriangle, Mail, Send, Key, CalendarX, Trash2 } from 'lucide-react';
+import { cn } from '@/shared/lib/utils';
 
 const ASUNTO_LLAVE_DEFAULT = 'Recordatorio de devolucion de llave - Llavero';
 const ASUNTO_RESERVA_DEFAULT = 'Reserva cerrada - Llave no reclamada - Llavero';
+
+const TABS = { LLAVES: 'llaves', RESERVAS: 'reservas' };
 
 function calcularTiempoTranscurrido(fechaEntrega, horario) {
   if (!fechaEntrega || !horario) return '-';
@@ -148,7 +151,7 @@ function ComposerSheet({ open, onOpenChange, destinatarios, mode, onEnviar, isPe
 
   return (
     <Sheet open={open} onOpenChange={handleOpen}>
-      <SheetContent side="right" className="overflow-y-auto">
+      <SheetContent side="right" className="overflow-y-auto sm:max-w-lg">
         <SheetHeader>
           <SheetTitle>
             {esReservas ? 'Notificar reservas sin reclamar' : 'Enviar notificacion de devolucion'}
@@ -294,6 +297,8 @@ function ComposerSheet({ open, onOpenChange, destinatarios, mode, onEnviar, isPe
 }
 
 export default function EnviarTab() {
+  const [tab, setTab] = useState(TABS.LLAVES);
+
   // ── Llaves ──
   const { data: pendientes = [], isLoading: loadingLlaves } = useTodosPendientes();
   const { mutateAsync: enviarLlaves, isPending: isPendingLlaves } = useEnviarNotificacion();
@@ -568,66 +573,94 @@ export default function EnviarTab() {
   ];
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
+      {/* ── Selector de pestañas ── */}
+      <div className="flex gap-1 border-b border-border">
+        <button
+          onClick={() => setTab(TABS.LLAVES)}
+          className={cn(
+            'px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-1.5',
+            tab === TABS.LLAVES
+              ? 'border-primary text-primary'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
+          )}
+        >
+          <Key className="h-4 w-4" />
+          Llaves pendientes
+          {pendientes.length > 0 && (
+            <span className="text-xs bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800 rounded-full px-2 py-0.5">
+              {pendientes.length}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => setTab(TABS.RESERVAS)}
+          className={cn(
+            'px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-1.5',
+            tab === TABS.RESERVAS
+              ? 'border-primary text-primary'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
+          )}
+        >
+          <CalendarX className="h-4 w-4" />
+          Reservas sin reclamar
+          {reservasNoReclamadas.length > 0 && (
+            <span className="text-xs bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800 rounded-full px-2 py-0.5">
+              {reservasNoReclamadas.length}
+            </span>
+          )}
+        </button>
+      </div>
+
       {/* ── Seccion: Prestamos de llaves ── */}
-      <section className="space-y-3">
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <div className="flex items-center gap-2">
-            <Key className="h-5 w-5 text-muted-foreground" />
-            <h2 className="font-semibold text-base text-foreground">Prestamos de llaves pendientes</h2>
-            {pendientes.length > 0 && (
-              <span className="text-xs bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800 rounded-full px-2 py-0.5">
-                {pendientes.length}
-              </span>
+      {tab === TABS.LLAVES && (
+        <section className="space-y-3">
+          <div className="flex items-center justify-end flex-wrap gap-3">
+            {selLlavesCount > 0 && (
+              <Button onClick={() => abrirSheetLlave(selLlavesList)}>
+                <Mail className="h-4 w-4 mr-1.5" />
+                Notificar devolucion ({selLlavesCount})
+              </Button>
             )}
           </div>
-          {selLlavesCount > 0 && (
-            <Button onClick={() => abrirSheetLlave(selLlavesList)}>
-              <Mail className="h-4 w-4 mr-1.5" />
-              Notificar devolucion ({selLlavesCount})
-            </Button>
-          )}
-        </div>
 
-        <DataTable
-          columns={columnasLlaves}
-          data={pendientes}
-          loading={loadingLlaves}
-          searchable
-          onRowClick={(row) => { abrirSheetLlave([row]); }}
-          emptyMessage="No hay prestamos pendientes"
-        />
-      </section>
+          <DataTable
+            columns={columnasLlaves}
+            data={pendientes}
+            loading={loadingLlaves}
+            searchable
+            exportable
+            exportFileName="llaves_pendientes"
+            onRowClick={(row) => { abrirSheetLlave([row]); }}
+            emptyMessage="No hay prestamos pendientes"
+          />
+        </section>
+      )}
 
       {/* ── Seccion: Reservas sin reclamar ── */}
-      <section className="space-y-3">
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <div className="flex items-center gap-2">
-            <CalendarX className="h-5 w-5 text-muted-foreground" />
-            <h2 className="font-semibold text-base text-foreground">Reservas sin reclamar</h2>
-            {reservasNoReclamadas.length > 0 && (
-              <span className="text-xs bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800 rounded-full px-2 py-0.5">
-                {reservasNoReclamadas.length}
-              </span>
+      {tab === TABS.RESERVAS && (
+        <section className="space-y-3">
+          <div className="flex items-center justify-end flex-wrap gap-3">
+            {selReservasCount > 0 && (
+              <Button onClick={() => abrirSheetReserva(selReservasList)}>
+                <Mail className="h-4 w-4 mr-1.5" />
+                Notificar ({selReservasCount})
+              </Button>
             )}
           </div>
-          {selReservasCount > 0 && (
-            <Button onClick={() => abrirSheetReserva(selReservasList)}>
-              <Mail className="h-4 w-4 mr-1.5" />
-              Notificar ({selReservasCount})
-            </Button>
-          )}
-        </div>
 
-        <DataTable
-          columns={columnasReservas}
-          data={reservasNoReclamadas}
-          loading={loadingReservas}
-          searchable
-          onRowClick={(row) => abrirSheetReserva([row])}
-          emptyMessage="No hay reservas sin reclamar"
-        />
-      </section>
+          <DataTable
+            columns={columnasReservas}
+            data={reservasNoReclamadas}
+            loading={loadingReservas}
+            searchable
+            exportable
+            exportFileName="reservas_sin_reclamar"
+            onRowClick={(row) => abrirSheetReserva([row])}
+            emptyMessage="No hay reservas sin reclamar"
+          />
+        </section>
+      )}
 
       {/* ── Sheet compartido ── */}
       <ComposerSheet

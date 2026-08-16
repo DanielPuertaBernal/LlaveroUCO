@@ -37,6 +37,7 @@ export default function DataTable({
   loading = false,
   onRowClick,
   onRowDoubleClick,
+  onExport,
 }) {
   const [globalFilter, setGlobalFilter] = useState('');
   const [sorting, setSorting] = useState([]);
@@ -100,7 +101,12 @@ export default function DataTable({
   const pageCount = table.getPageCount();
   const currentPage = table.getState().pagination.pageIndex;
 
+  // Por defecto exporta solo las columnas visibles en la tabla; si la
+  // página necesita un reporte más completo que lo que muestra en pantalla,
+  // puede pasar `onExport` con sus propios datos/columnas.
   async function handleExport() {
+    if (onExport) return onExport(table.getFilteredRowModel().rows.map((row) => row.original));
+
     const XLSX = await import('xlsx');
     const exportData = table.getFilteredRowModel().rows.map((row) => {
       const obj = {};

@@ -258,6 +258,8 @@ export default function NotificacionesTab() {
         data={pendientes}
         loading={isLoading}
         searchable
+        exportable
+        exportFileName="notificaciones_pendientes"
         onRowClick={onRowClick}
       />
 

@@ -125,7 +125,7 @@ export default function UsuariosPage() {
         <Button onClick={abrirNuevo}>+ Nuevo Usuario</Button>
       </div>
 
-      <DataTable columns={COLS} data={usuarios} loading={isLoading} searchable />
+      <DataTable columns={COLS} data={usuarios} loading={isLoading} searchable exportable exportFileName="usuarios" />
 
       <Sheet open={sheetOpen} onOpenChange={(open) => { if (!open) cerrarSheet(); }}>
         <SheetContent>

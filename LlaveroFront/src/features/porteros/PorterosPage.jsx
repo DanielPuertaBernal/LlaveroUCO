@@ -221,7 +221,7 @@ export default function PorterosPage() {
         Los porteros inician sesión con su cuenta Office365 institucional. Asigna los bloques y permisos que cada uno puede operar.
       </div>
 
-      <DataTable columns={columns} data={porteros} loading={isLoading} searchable />
+      <DataTable columns={columns} data={porteros} loading={isLoading} searchable exportable exportFileName="porteros" />
 
       {/* Sheet: crear portero */}
       <Sheet open={sheetNuevoOpen} onOpenChange={(open) => { if (!open) cerrarNuevo(); }}>

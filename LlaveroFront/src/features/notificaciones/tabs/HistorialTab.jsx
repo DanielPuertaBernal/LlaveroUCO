@@ -259,6 +259,8 @@ export default function HistorialTab() {
         data={registros}
         loading={isLoading}
         searchable
+        exportable
+        exportFileName="notificaciones_historial"
         onRowClick={abrirDetalles}
       />
       <p className="text-xs text-muted-foreground text-center">

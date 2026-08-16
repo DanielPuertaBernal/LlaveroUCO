@@ -718,8 +718,8 @@ export default function PrestamosPage() {
           {/* Table */}
           <div>
             {activeTab === 'activos'
-              ? <DataTable columns={columns} data={prestamos} loading={isLoading} searchable onRowClick={(row) => setDetallePrestamoId(String(row.id))} />
-              : <DataTable columns={historialColumns} data={historialPrestamos} loading={isLoadingHistorial} searchable onRowClick={(row) => setDetallePrestamoId(String(row.id))} />}
+              ? <DataTable columns={columns} data={prestamos} loading={isLoading} searchable exportable exportFileName="prestamos_activos" onRowClick={(row) => setDetallePrestamoId(String(row.id))} />
+              : <DataTable columns={historialColumns} data={historialPrestamos} loading={isLoadingHistorial} searchable exportable exportFileName="prestamos_historial" onRowClick={(row) => setDetallePrestamoId(String(row.id))} />}
           </div>
 
           {/* Modal de detalle */}

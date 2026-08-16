@@ -11,7 +11,7 @@ import {
 import { useUbicacionesOperativas } from '@/shared/hooks/useUbicacionesOperativas';
 import { UBICACIONES } from '@/shared/constants';
 import Swal from '@/shared/lib/swal';
-import { BarChart3, FileDown, Trash2, Key, CreditCard, Loader2, CheckCircle2, XCircle, Clock } from 'lucide-react';
+import { BarChart3, Trash2, Key, CreditCard, Loader2, CheckCircle2, XCircle, Clock } from 'lucide-react';
 import { MobileDatePicker } from '@mui/x-date-pickers/MobileDatePicker';
 import dayjs from 'dayjs';
 import StatusBadge from '@/shared/components/ui/StatusBadge';
@@ -30,7 +30,10 @@ import { soloNumerosConTope, LONGITUD_MAXIMA } from '@/shared/utils/inputValidat
 const UBICACION_MODAL_ENTREGA = UBICACIONES.OFICINA;
 
 export default function HistorialPage() {
-  const [filters, setFilters] = useState({ fecha: new Date().toISOString().slice(0, 10), estado: '' });
+  // 'en-CA' formatea como YYYY-MM-DD usando la hora LOCAL — a diferencia de
+  // toISOString() (UTC), que en Colombia (UTC-5) ya muestra el día siguiente
+  // entre las 7pm y medianoche, ocultando entregas recién hechas ese filtro.
+  const [filters, setFilters] = useState({ fecha: new Date().toLocaleDateString('en-CA'), estado: '' });
   const { data: registros = [], isLoading, refetch } = useHistorialLlaves(filters);
   const { getUbicacionLabel } = useUbicacionesOperativas();
   const devolverLlave = useDevolverLlave();
@@ -60,23 +63,40 @@ export default function HistorialPage() {
     const correoReclama = row.correoReclama || '—';
     const contactoReclama = row.numeroContactoReclama || '—';
 
+    const campo = (label, valor) => `
+      <div>
+        <b>${label}:</b> ${valor}
+      </div>
+    `;
+
     Swal.fire({
       title: 'Detalles del registro',
+      width: 640,
       html: `
-        <div style="text-align:left;font-size:14px;line-height:1.9">
-          <b>Materia / Motivo:</b> ${row.materia || '—'}<br/>
-          <b>Docente:</b> ${row.docente || '—'}<br/>
-          <b>Documento:</b> ${row.documento || '—'}<br/>
-          <b>Ubic. Préstamo:</b> ${getUbicacionLabel(row.ubicacionPrestamo)}<br/>
-          <b>Ubic. Devolución:</b> ${getUbicacionLabel(row.ubicacionDevolucion)}<br/>
-          <b>Duración:</b> ${row.duracion || '—'}<br/>
-          <b>Reclamo a tiempo:</b> ${textoReclamoATiempo(row.seReclamoATiempo)}<br/>
-          <b>Tiempo Retraso:</b> ${row.tiempoRetraso || '—'}<br/>
-          <b>Tipo Entrega:</b> ${textoTipoEntrega(row.tipoEntrega)}<br/>
-          <hr style="margin:8px 0;border-color:hsl(var(--border))"/>
-          <b>Reclamó:</b> ${reclamaInfo}<br/>
-          <b>Correo:</b> ${correoReclama}<br/>
-          <b>Contacto:</b> ${contactoReclama}
+        <div style="text-align:left;font-size:14px;line-height:1.7">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 24px">
+            ${campo('Materia / Motivo', row.materia || '—')}
+            ${campo('Docente', row.docente || '—')}
+            ${campo('Documento', row.documento || '—')}
+            ${campo('Aula', row.aula || '—')}
+            ${campo('Horario', row.horario || '—')}
+            ${campo('Tipo Entrega', textoTipoEntrega(row.tipoEntrega))}
+            ${campo('F. Préstamo', row.fechaEntrega || '—')}
+            ${campo('H. Préstamo', row.horaEntrega || '—')}
+            ${campo('F. Devolución', row.fechaDevolucion || '—')}
+            ${campo('H. Devolución', row.horaDevolucion || '—')}
+            ${campo('Ubic. Préstamo', getUbicacionLabel(row.ubicacionPrestamo))}
+            ${campo('Ubic. Devolución', getUbicacionLabel(row.ubicacionDevolucion))}
+            ${campo('Duración', row.duracion || '—')}
+            ${campo('Reclamo a tiempo', textoReclamoATiempo(row.seReclamoATiempo))}
+            ${campo('Tiempo de demora', row.tiempoRetraso || '—')}
+          </div>
+          <hr style="margin:10px 0;border-color:hsl(var(--border))"/>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 24px">
+            ${campo('Reclamó', reclamaInfo)}
+            ${campo('Correo', correoReclama)}
+            ${campo('Contacto', contactoReclama)}
+          </div>
         </div>
       `,
       icon: 'info',
@@ -119,8 +139,6 @@ export default function HistorialPage() {
     { key: 'horario', label: 'Horario' },
     { key: 'fechaEntrega', label: 'F. Entrega' },
     { key: 'horaEntrega', label: 'H. Entrega' },
-    { key: 'fechaDevolucion', label: 'F. Devolución' },
-    { key: 'horaDevolucion', label: 'H. Devolución' },
     {
       key: 'estado',
       label: 'Estado',
@@ -151,13 +169,13 @@ export default function HistorialPage() {
     },
   ];
 
-  async function handleExport() {
+  async function handleExport(filas) {
     const XLSX = await import('xlsx');
     const quienLabel = (v) => v === 'docente' ? 'Docente' : v === 'monitor' ? 'Monitor' : v === 'otra_persona' ? 'Otra persona' : '';
     const reclamaAtLabel = (v) => (v ? 'Sí' : 'No');
     const tipoEntregaLabel = (v) => (v === 'manual' ? 'Manual' : v === 'carnet' ? 'Carnet NFC' : '');
 
-    const data = registros.map((r) => ({
+    const data = filas.map((r) => ({
       'Materia / Motivo': r.materia || '',
       'Docente': r.docente || '',
       'Documento': r.documento || '',
@@ -171,7 +189,7 @@ export default function HistorialPage() {
       'Ubic. Préstamo': getUbicacionLabel(r.ubicacionPrestamo),
       'Ubic. Devolución': getUbicacionLabel(r.ubicacionDevolucion),
       'Reclamo a tiempo': reclamaAtLabel(r.seReclamoATiempo),
-      'Tiempo Retraso': r.tiempoRetraso || '',
+      'Tiempo de demora': r.tiempoRetraso || '',
       'Tipo Entrega': tipoEntregaLabel(r.tipoEntrega),
       'Quién Reclamó': quienLabel(r.quienReclama),
       'Nombre Reclamó': r.nombreReclama || '',
@@ -200,14 +218,11 @@ export default function HistorialPage() {
           <Button onClick={() => setEntregaOpen(true)}>
             <Key className="h-4 w-4 mr-1" />Entrega
           </Button>
-          <Button variant="success" onClick={handleExport}>
-            <FileDown className="h-4 w-4 mr-1" />Exportar Excel
-          </Button>
         </div>
       </div>
 
       <Sheet open={entregaOpen} onOpenChange={(open) => (open ? setEntregaOpen(true) : handleCerrarEntrega())}>
-        <SheetContent className="sm:max-w-md">
+        <SheetContent className="sm:max-w-lg">
           <EntregaCarnetModal onClose={handleCerrarEntrega} />
         </SheetContent>
       </Sheet>
@@ -244,7 +259,7 @@ export default function HistorialPage() {
         </div>
       </div>
 
-      <DataTable columns={COLS} data={registros} loading={isLoading} searchable exportable exportFileName="historial" onRowClick={abrirDetalles} extraSearchKeys={['documento']} />
+      <DataTable columns={COLS} data={registros} loading={isLoading} searchable exportable exportFileName="historial_llaves" onExport={handleExport} onRowClick={abrirDetalles} extraSearchKeys={['documento']} />
       <p className="text-xs text-muted-foreground text-center">Clic en una fila para ver detalles completos</p>
     </div>
   );
@@ -451,6 +466,8 @@ function ResultadoEntregaCarnet({ resultado, onElegirDevolucion, onConfirmarAnti
           <Clock className="h-5 w-5 shrink-0 mt-0.5" />
           <div>
             <p className="font-semibold">{resultado.mensaje || 'Reclamo anticipado'}</p>
+            {nombrePersona && <p>Docente: {nombrePersona}</p>}
+            {resultado.clase?.materia && <p>Materia: {resultado.clase.materia}</p>}
             {resultado.clase?.aula && <p>Aula: {resultado.clase.aula}</p>}
             {resultado.clase?.horario && <p>Horario: {resultado.clase.horario}</p>}
           </div>

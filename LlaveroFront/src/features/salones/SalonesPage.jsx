@@ -35,6 +35,7 @@ import {
   Check,
   X,
   CheckCircle2,
+  FileSpreadsheet,
 } from 'lucide-react';
 import Button from '@/shared/components/ui/Button';
 import { FormField, Input, Select } from '@/shared/components/ui/FormField';
@@ -300,6 +301,21 @@ export default function SalonesPage() {
     crearSalon.isPending ||
     actualizarSalon.isPending;
 
+  // ── Exportar salones a Excel ─────────────────────────────────
+  async function handleExportSalones() {
+    const XLSX = await import('xlsx');
+    const exportData = salones.map((s) => ({
+      'Nombre Salón': s.nombre_salon ?? '',
+      'Bloque': s.nombre_bloque ?? '',
+      'Capacidad (estudiantes)': s.capacidad_estudiantes ?? '',
+      'Tipo de Silletería': s.tipo_silleteria ?? '',
+    }));
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Salones');
+    XLSX.writeFile(wb, 'salones.xlsx');
+  }
+
   return (
     <div className="space-y-6">
       {/* ── Header ─────────────────────────────────────────────── */}
@@ -328,12 +344,22 @@ export default function SalonesPage() {
           </h1>
         </div>
         {selectedBloque ? (
-          <Button onClick={() => openSheet('nuevo-salon')}>
-            <Plus className="h-4 w-4" />
-            Agregar salón
-          </Button>
+          <div className="flex gap-2 flex-wrap">
+            <Button variant="success" onClick={handleExportSalones}>
+              <FileSpreadsheet className="h-4 w-4" />
+              Exportar
+            </Button>
+            <Button onClick={() => openSheet('nuevo-salon')}>
+              <Plus className="h-4 w-4" />
+              Agregar salón
+            </Button>
+          </div>
         ) : (
           <div className="flex gap-2 flex-wrap">
+            <Button variant="success" onClick={handleExportSalones}>
+              <FileSpreadsheet className="h-4 w-4" />
+              Exportar
+            </Button>
             <Button variant="outline" onClick={() => openSheet('tipos-silleteria')}>
               <Armchair className="h-4 w-4" />
               Tipos de silletería
