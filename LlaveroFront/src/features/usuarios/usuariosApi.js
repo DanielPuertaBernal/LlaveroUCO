@@ -7,8 +7,6 @@ export const usuariosApi = {
   cambiarEstado: (username, activo) => apiClient.patch(`/usuarios/${username}/estado`, { activo }),
   editarPerfil: (data) => apiClient.patch('/usuarios/perfil', data),
   cambiarContrasena: (data) => apiClient.patch('/usuarios/contrasena', data),
-  vincularComunidad: (username, numero_documento) =>
-    apiClient.patch(`/usuarios/${username}/vinculacion`, { numero_documento }),
 };
 
 export function useUsuarios() {
@@ -30,15 +28,6 @@ export function useCambiarEstadoUsuario() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ username, activo }) => usuariosApi.cambiarEstado(username, activo),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['usuarios'] }),
-  });
-}
-
-export function useVincularComunidad() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ username, numero_documento }) =>
-      usuariosApi.vincularComunidad(username, numero_documento),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['usuarios'] }),
   });
 }

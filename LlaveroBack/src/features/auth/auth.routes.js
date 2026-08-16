@@ -8,44 +8,9 @@ const { authLimiter, refreshLimiter } = require('../../shared/middlewares/rate.l
 
 const router = Router();
 
-const loginSchema = z.object({
-  usuario: z.string().min(1, 'Usuario requerido'),
-  password: z.string().min(1, 'Contraseña requerida'),
-});
-
 const refreshSchema = z.object({
   refreshToken: z.string().min(1, 'refreshToken requerido'),
 });
-
-/**
- * @openapi
- * /auth/login:
- *   post:
- *     tags: [Auth]
- *     summary: Iniciar sesión
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/LoginRequest'
- *     responses:
- *       200:
- *         description: Login exitoso
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/LoginResponse'
- *       400:
- *         description: Datos inválidos
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorValidacion'
- *       401:
- *         description: Credenciales incorrectas
- */
-router.post('/login', authLimiter, validate(loginSchema), (req, res) => authController.login(req, res));
 
 /**
  * @openapi

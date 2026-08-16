@@ -18,46 +18,6 @@ const JWT_MAX_SESSIONS = Math.max(parseInt(process.env.JWT_MAX_SESSIONS || '5', 
 
 class AuthService {
   /**
-   * Autentica un usuario y retorna tokens JWT
-   * @param {string} usuario
-   * @param {string} password
-   * @param {object} context
-   * @returns {Promise<{ok: boolean, mensaje: string, token?: string, refreshToken?: string, usuario?: object}>}
-   */
-  async login(usuario, password, context = {}) {
-    const INVALID_MSG = 'Usuario o contraseña incorrectos';
-    const user = await authRepository.findByUsername(usuario);
-
-    if (!user || !user.activo) {
-      logger.warn('Login fallido: usuario no encontrado o inactivo', { usuario });
-      return { ok: false, mensaje: INVALID_MSG };
-    }
-
-    const passwordMatch = await bcrypt.compare(password, user.hash_password);
-    if (!passwordMatch) {
-      logger.warn('Login fallido: contraseña incorrecta', { usuario });
-      return { ok: false, mensaje: INVALID_MSG };
-    }
-
-    const token = this._signAccessToken(user);
-    const refreshToken = this._signRefreshToken(user.id);
-    await this._persistRefreshSession(user, refreshToken, context);
-
-    logger.info('Login exitoso', { usuario, rol: user.rol });
-
-    // No retornar hash_password ni sesiones
-    const { hash_password, sesiones, ...usuarioSafe } = user;
-
-    return {
-      ok: true,
-      mensaje: `Bienvenido ${user.nombre}`,
-      token,
-      refreshToken,
-      usuario: usuarioSafe,
-    };
-  }
-
-  /**
    * Verifica un refresh token y emite nuevo access token con rotación de refresh
    * @param {string} refreshToken
    * @param {object} context

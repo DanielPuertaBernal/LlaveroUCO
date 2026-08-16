@@ -11,31 +11,6 @@ const log = createLogger('Auth');
 
 class AuthController {
   /**
-   * POST /api/auth/login
-   */
-  async login(req, res) {
-    const { usuario, password } = req.body;
-    const result = await authService.login(usuario, password, {
-      userAgent: req.headers['user-agent'],
-      ip: req.ip,
-    });
-
-    if (!result.ok) {
-      return res.status(401).json({ ok: false, message: result.mensaje });
-    }
-
-    return res.status(200).json({
-      ok: true,
-      message: result.mensaje,
-      data: {
-        token: result.token,
-        refreshToken: result.refreshToken,
-        usuario: result.usuario,
-      },
-    });
-  }
-
-  /**
    * POST /api/auth/logout
    * JWT es stateless; el cliente debe eliminar el token.
    * En una implementación con blacklist se agregaría aquí.

@@ -34,36 +34,49 @@ class UsuarioService {
   }
 
   /**
-   * Crea un nuevo usuario auxiliar
+   * Deriva un nombre de usuario único a partir del correo (login es siempre
+   * por Office365/correo; `usuario` solo se conserva como identificador de
+   * auditoría interno, no se le pide al admin que lo escriba).
+   * @param {string} email
+   * @returns {Promise<string>}
+   */
+  async _generarUsuarioDesdeEmail(email) {
+    const base = email.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '') || 'usuario';
+    let candidato = base;
+    let sufijo = 1;
+    while ((await usuarioRepository.checkDuplicates(candidato, '')).usuarioExiste) {
+      candidato = `${base}${++sufijo}`;
+    }
+    return candidato;
+  }
+
+  /**
+   * Crea un nuevo usuario (autenticación siempre vía Office365 por correo)
    * Solo ADMIN_PROG puede crear usuarios
    * @param {object} data
-   * @param {string} data.usuario
    * @param {string} data.nombre
    * @param {string} data.email
    * @param {string} data.contacto
-   * @param {string} data.password
    * @param {string} [data.rol] - Default: AUX_PROG
    * @returns {Promise<object>}
    */
-  async crearUsuario({ usuario, nombre, email, contacto, password, rol, numero_documento }) {
-    // Verificar duplicados
-    const { usuarioExiste, emailExiste } = await usuarioRepository.checkDuplicates(usuario, email);
-    if (usuarioExiste) {
-      throw ApiError.conflict(`El usuario '${usuario}' ya existe`);
-    }
+  async crearUsuario({ nombre, email, contacto, rol, numero_documento }) {
+    const emailNormalizado = email.toLowerCase().trim();
+    const { emailExiste } = await usuarioRepository.checkDuplicates('', emailNormalizado);
     if (emailExiste) {
       throw ApiError.conflict(`El email '${email}' ya está registrado`);
     }
 
-    const hashPassword = await authService.hashPassword(password);
+    const usuario = await this._generarUsuarioDesdeEmail(emailNormalizado);
 
     return usuarioRepository.create({
       usuario,
       nombre: nombre.trim(),
-      email: email.toLowerCase().trim(),
+      email: emailNormalizado,
       contacto: contacto || '',
       rol: rol || ROLES.AUX,
-      hash_password: hashPassword,
+      hash_password: null,
+      proveedor_auth: 'office365',
       activo: true,
       numero_documento: numero_documento || '',
     });
@@ -152,25 +165,6 @@ class UsuarioService {
       throw ApiError.notFound(`Usuario '${username}' no encontrado`);
     }
     return user;
-  }
-
-  /**
-   * Vincula o desvincula un usuario de la app con un registro de Comunidad.
-   * Pasar numero_documento vacío ('') para desvincular.
-   */
-  async vincularComunidad(username, numero_documento) {
-    const doc = String(numero_documento || '').trim();
-    if (doc) {
-      const persona = await comunidadRepository.findByDocumento(doc);
-      if (!persona) {
-        throw ApiError.notFound(`No se encontró ninguna persona en Comunidad con documento '${doc}'`);
-      }
-    }
-    const updated = await usuarioRepository.updateByUsername(username, { numero_documento: doc });
-    if (!updated) {
-      throw ApiError.notFound(`Usuario '${username}' no encontrado`);
-    }
-    return updated;
   }
 }
 
