@@ -4,16 +4,194 @@ import {
   useConfiguracionDefaults,
   useGuardarConfiguracion,
   useEliminarConfiguracion,
+  useActualizarDefaults,
 } from './configuracionApi';
 import { useBloques } from '@/features/bloques/bloquesApi';
 import Swal from '@/shared/lib/swal';
-import { Settings, Save, Trash2, Plus } from 'lucide-react';
+import { Plus, Trash2, Pencil, Clock, Bell, RefreshCw, Hash, Settings } from 'lucide-react';
 import Button from '@/shared/components/ui/Button';
 import { FormField, Select } from '@/shared/components/ui/FormField';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/shared/components/ui/Sheet';
 
 const OPCIONES_TIEMPO_PRESTAMO = [30, 45, 60, 90, 120, 150, 180, 240];
 const OPCIONES_INTERVALO = [10, 15, 20, 30, 45, 60];
 const OPCIONES_MAX_RECORDATORIOS = [1, 2, 3, 5, 8, 10];
+
+function PillSelector({ opciones, valor, onChange, formatLabel, min = 1, max = 9999, suffix = '' }) {
+  const esPersonalizado = !opciones.includes(valor);
+  const [modoCustom, setModoCustom] = useState(esPersonalizado);
+
+  function activarCustom() {
+    setModoCustom(true);
+  }
+
+  function handleCustomChange(e) {
+    const n = parseInt(e.target.value, 10);
+    if (!Number.isNaN(n) && n >= min && n <= max) onChange(n);
+  }
+
+  function handlePillClick(opt) {
+    setModoCustom(false);
+    onChange(opt);
+  }
+
+  return (
+    <div className="flex flex-wrap gap-1.5 items-center">
+      {opciones.map((opt) => (
+        <button
+          key={opt}
+          type="button"
+          onClick={() => handlePillClick(opt)}
+          className={`px-3 py-1 text-sm rounded-full border transition-colors ${
+            !modoCustom && valor === opt
+              ? 'bg-primary text-primary-foreground border-primary font-medium'
+              : 'bg-background text-muted-foreground border-border hover:border-primary/60 hover:text-foreground'
+          }`}
+        >
+          {formatLabel ? formatLabel(opt) : opt}
+        </button>
+      ))}
+
+      {modoCustom ? (
+        <div className="flex items-center gap-1">
+          <input
+            type="number"
+            min={min}
+            max={max}
+            defaultValue={esPersonalizado ? valor : ''}
+            onChange={handleCustomChange}
+            autoFocus
+            className="w-20 border border-primary rounded-full px-3 py-1 text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring text-center"
+          />
+          {suffix && <span className="text-xs text-muted-foreground">{suffix}</span>}
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={activarCustom}
+          className="px-3 py-1 text-sm rounded-full border border-dashed border-border text-muted-foreground hover:border-primary/60 hover:text-foreground transition-colors"
+        >
+          Personalizado
+        </button>
+      )}
+    </div>
+  );
+}
+
+function Toggle({ checked, onChange, label }) {
+  return (
+    <label className="flex items-center gap-3 cursor-pointer select-none">
+      <button
+        type="button"
+        onClick={() => onChange(!checked)}
+        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ${
+          checked ? 'bg-primary' : 'bg-muted-foreground/30'
+        }`}
+      >
+        <span
+          className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+            checked ? 'translate-x-6' : 'translate-x-1'
+          }`}
+        />
+      </button>
+      <span className={`text-sm font-medium ${checked ? 'text-foreground' : 'text-muted-foreground'}`}>
+        {label ?? (checked ? 'Activas' : 'Desactivadas')}
+      </span>
+    </label>
+  );
+}
+
+function ConfigForm({ initial, bloques, configs, editando, onSave, onCancel, isPending }) {
+  const [form, setForm] = useState(initial);
+  const set = (key, val) => setForm((f) => ({ ...f, [key]: val }));
+
+  return (
+    <div className="space-y-5">
+      {editando === '__nuevo__' && (
+        <FormField label="Bloque">
+          <Select
+            value={form.nombre_bloque}
+            onChange={(e) => set('nombre_bloque', e.target.value)}
+          >
+            <option value="">Seleccionar bloque...</option>
+            {bloques
+              .filter((b) => !configs.some((c) => c.nombre_bloque === b.nombre_bloque))
+              .map((b) => (
+                <option key={b.nombre_bloque} value={b.nombre_bloque}>{b.nombre_bloque}</option>
+              ))}
+          </Select>
+        </FormField>
+      )}
+
+      <div className="space-y-4">
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <Clock className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-medium">Tiempo máximo de préstamo</span>
+            <span className="text-xs text-muted-foreground">(desde fin de clase)</span>
+          </div>
+          <PillSelector
+            opciones={OPCIONES_TIEMPO_PRESTAMO}
+            valor={form.tiempo_maximo_prestamo_minutos}
+            onChange={(v) => set('tiempo_maximo_prestamo_minutos', v)}
+            formatLabel={(v) => `${v} min`}
+            min={5}
+            max={1440}
+            suffix="min"
+          />
+        </div>
+
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <RefreshCw className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-medium">Intervalo entre recordatorios</span>
+          </div>
+          <PillSelector
+            opciones={OPCIONES_INTERVALO}
+            valor={form.intervalo_recordatorio_minutos}
+            onChange={(v) => set('intervalo_recordatorio_minutos', v)}
+            formatLabel={(v) => `${v} min`}
+            min={1}
+            max={1440}
+            suffix="min"
+          />
+        </div>
+
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <Hash className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-medium">Máximo de recordatorios</span>
+          </div>
+          <PillSelector
+            opciones={OPCIONES_MAX_RECORDATORIOS}
+            valor={form.max_recordatorios}
+            onChange={(v) => set('max_recordatorios', v)}
+            min={1}
+            max={50}
+          />
+        </div>
+
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <Bell className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-medium">Notificaciones automáticas</span>
+          </div>
+          <Toggle
+            checked={form.notificaciones_activas}
+            onChange={(v) => set('notificaciones_activas', v)}
+          />
+        </div>
+      </div>
+
+      <div className="flex gap-2 pt-1">
+        <Button onClick={() => onSave(form)} disabled={isPending}>
+          {isPending ? 'Guardando...' : 'Guardar'}
+        </Button>
+        <Button variant="outline" onClick={onCancel}>Cancelar</Button>
+      </div>
+    </div>
+  );
+}
 
 export default function ConfiguracionPage() {
   const { data: configs = [], isLoading } = useConfiguraciones();
@@ -21,12 +199,14 @@ export default function ConfiguracionPage() {
   const { data: bloques = [] } = useBloques();
   const guardar = useGuardarConfiguracion();
   const eliminar = useEliminarConfiguracion();
-  const [editando, setEditando] = useState(null); // nombre_bloque o '__nuevo__'
-  const [form, setForm] = useState({});
+  const actualizarDefaults = useActualizarDefaults();
+  const [editando, setEditando] = useState(null);
+  const [formInicial, setFormInicial] = useState({});
+  const [editandoDefaults, setEditandoDefaults] = useState(false);
 
   function abrirEditor(config) {
     setEditando(config?.nombre_bloque || '__nuevo__');
-    setForm({
+    setFormInicial({
       nombre_bloque: config?.nombre_bloque || '',
       tiempo_maximo_prestamo_minutos: config?.tiempo_maximo_prestamo_minutos ?? defaults?.tiempo_maximo_prestamo_minutos ?? 120,
       intervalo_recordatorio_minutos: config?.intervalo_recordatorio_minutos ?? defaults?.intervalo_recordatorio_minutos ?? 30,
@@ -35,7 +215,7 @@ export default function ConfiguracionPage() {
     });
   }
 
-  async function handleGuardar() {
+  async function handleGuardar(form) {
     if (!form.nombre_bloque.trim()) {
       Swal.fire({ icon: 'warning', title: 'Nombre de bloque requerido' });
       return;
@@ -50,6 +230,22 @@ export default function ConfiguracionPage() {
       });
       Swal.fire({ icon: 'success', title: 'Configuración guardada', timer: 1500, showConfirmButton: false });
       setEditando(null);
+    } catch (err) {
+      Swal.fire({ icon: 'error', title: 'Error', text: err.response?.data?.message ?? 'No se pudo guardar' });
+    }
+  }
+
+  async function handleGuardarDefaults(form) {
+    try {
+      const { nombre_bloque: _ignored, ...data } = form;
+      await actualizarDefaults.mutateAsync({
+        tiempo_maximo_prestamo_minutos: Number(data.tiempo_maximo_prestamo_minutos),
+        intervalo_recordatorio_minutos: Number(data.intervalo_recordatorio_minutos),
+        max_recordatorios: Number(data.max_recordatorios),
+        notificaciones_activas: data.notificaciones_activas,
+      });
+      Swal.fire({ icon: 'success', title: 'Valores por defecto actualizados', timer: 1500, showConfirmButton: false });
+      setEditandoDefaults(false);
     } catch (err) {
       Swal.fire({ icon: 'error', title: 'Error', text: err.response?.data?.message ?? 'No se pudo guardar' });
     }
@@ -80,128 +276,155 @@ export default function ConfiguracionPage() {
         <div>
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
             <Settings className="h-6 w-6" />
-            Configuración de Notificaciones
+            Configuración
           </h1>
-          <p className="text-muted-foreground text-sm">Tiempos y políticas por bloque</p>
+          <p className="text-muted-foreground text-sm">Tiempos y políticas de recordatorios por bloque</p>
         </div>
-        <Button onClick={() => abrirEditor(null)}>
+        <Button onClick={() => abrirEditor(null)} size="sm">
           <Plus className="h-4 w-4 mr-1" />Nuevo bloque
         </Button>
       </div>
 
-      {/* Defaults info */}
-      {defaults && (
-        <div className="bg-card border border-border rounded-lg p-4">
-          <h2 className="font-semibold text-sm text-muted-foreground mb-2">Valores por defecto (bloques sin configuración)</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-            <div><span className="text-muted-foreground">Tiempo máximo:</span> <strong>{defaults.tiempo_maximo_prestamo_minutos} min</strong></div>
-            <div><span className="text-muted-foreground">Intervalo:</span> <strong>{defaults.intervalo_recordatorio_minutos} min</strong></div>
-            <div><span className="text-muted-foreground">Máx recordatorios:</span> <strong>{defaults.max_recordatorios}</strong></div>
-            <div><span className="text-muted-foreground">Activas:</span> <strong>{defaults.notificaciones_activas ? 'Sí' : 'No'}</strong></div>
-          </div>
-        </div>
-      )}
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">
+          {configs.length === 0
+            ? 'Sin configuraciones personalizadas — todos los bloques usan valores por defecto'
+            : `${configs.length} bloque${configs.length !== 1 ? 's' : ''} con configuración personalizada`}
+        </p>
+      </div>
 
-      {/* Formulario edición */}
-      {editando && (
-        <div className="bg-card border-2 border-primary/30 rounded-lg p-5 space-y-4">
-          <h2 className="font-semibold">{editando === '__nuevo__' ? 'Nueva configuración de bloque' : `Editando bloque: ${editando}`}</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <FormField label="Bloque">
-              <Select
-                value={form.nombre_bloque}
-                onChange={(e) => setForm((f) => ({ ...f, nombre_bloque: e.target.value }))}
-                disabled={editando !== '__nuevo__'}
-              >
-                <option value="">Seleccionar bloque...</option>
-                {bloques
-                  .filter((b) => editando === '__nuevo__' ? !configs.some((c) => c.nombre_bloque === b.nombre_bloque) : true)
-                  .map((b) => (
-                    <option key={b.nombre_bloque} value={b.nombre_bloque}>{b.nombre_bloque}</option>
-                  ))}
-              </Select>
-            </FormField>
-            <FormField label="Tiempo máximo préstamo">
-              <Select
-                value={form.tiempo_maximo_prestamo_minutos}
-                onChange={(e) => setForm((f) => ({ ...f, tiempo_maximo_prestamo_minutos: Number(e.target.value) }))}
-              >
-                {OPCIONES_TIEMPO_PRESTAMO.map((v) => (
-                  <option key={v} value={v}>{v} minutos</option>
-                ))}
-              </Select>
-            </FormField>
-            <FormField label="Intervalo entre recordatorios">
-              <Select
-                value={form.intervalo_recordatorio_minutos}
-                onChange={(e) => setForm((f) => ({ ...f, intervalo_recordatorio_minutos: Number(e.target.value) }))}
-              >
-                {OPCIONES_INTERVALO.map((v) => (
-                  <option key={v} value={v}>{v} minutos</option>
-                ))}
-              </Select>
-            </FormField>
-            <FormField label="Máximo de recordatorios">
-              <Select
-                value={form.max_recordatorios}
-                onChange={(e) => setForm((f) => ({ ...f, max_recordatorios: Number(e.target.value) }))}
-              >
-                {OPCIONES_MAX_RECORDATORIOS.map((v) => (
-                  <option key={v} value={v}>{v}</option>
-                ))}
-              </Select>
-            </FormField>
-            <FormField label="Notificaciones activas">
-              <label className="flex items-center gap-2 mt-2">
-                <input
-                  type="checkbox"
-                  checked={form.notificaciones_activas}
-                  onChange={(e) => setForm((f) => ({ ...f, notificaciones_activas: e.target.checked }))}
-                  className="w-4 h-4 rounded border-border"
-                />
-                <span className="text-sm">{form.notificaciones_activas ? 'Activas' : 'Desactivadas'}</span>
-              </label>
-            </FormField>
-          </div>
-          <div className="flex gap-2">
-            <Button onClick={handleGuardar} disabled={guardar.isPending}>
-              <Save className="h-4 w-4 mr-1" />{guardar.isPending ? 'Guardando...' : 'Guardar'}
-            </Button>
-            <Button variant="outline" onClick={() => setEditando(null)}>Cancelar</Button>
-          </div>
-        </div>
-      )}
+      <Sheet open={editandoDefaults} onOpenChange={(open) => { if (!open) setEditandoDefaults(false); }}>
+        <SheetContent>
+          <SheetHeader>
+            <SheetTitle>Editar valores por defecto</SheetTitle>
+          </SheetHeader>
+          {defaults && (
+            <ConfigForm
+              key="__defaults__"
+              initial={{
+                nombre_bloque: '__defaults__',
+                tiempo_maximo_prestamo_minutos: defaults.tiempo_maximo_prestamo_minutos,
+                intervalo_recordatorio_minutos: defaults.intervalo_recordatorio_minutos,
+                max_recordatorios: defaults.max_recordatorios,
+                notificaciones_activas: defaults.notificaciones_activas,
+              }}
+              bloques={[]}
+              configs={[]}
+              editando="__defaults__"
+              onSave={handleGuardarDefaults}
+              onCancel={() => setEditandoDefaults(false)}
+              isPending={actualizarDefaults.isPending}
+            />
+          )}
+        </SheetContent>
+      </Sheet>
 
-      {/* Lista de configuraciones */}
+      <Sheet open={Boolean(editando)} onOpenChange={(open) => { if (!open) setEditando(null); }}>
+        <SheetContent>
+          <SheetHeader>
+            <SheetTitle>
+              {editando === '__nuevo__' ? 'Nueva configuración de bloque' : `Editando: ${editando}`}
+            </SheetTitle>
+          </SheetHeader>
+          {editando && (
+            <ConfigForm
+              key={editando}
+              initial={formInicial}
+              bloques={bloques}
+              configs={configs}
+              editando={editando}
+              onSave={handleGuardar}
+              onCancel={() => setEditando(null)}
+              isPending={guardar.isPending}
+            />
+          )}
+        </SheetContent>
+      </Sheet>
+
       {isLoading ? (
         <p className="text-muted-foreground text-center py-8">Cargando...</p>
-      ) : configs.length === 0 ? (
-        <p className="text-muted-foreground text-center py-8">No hay configuraciones personalizadas. Se usan los valores por defecto para todos los bloques.</p>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {configs.map((c) => (
-            <div key={c.nombre_bloque} className="bg-card border border-border rounded-lg p-4 space-y-2">
+          {defaults && (
+            <div className="bg-card border border-border rounded-xl p-4 space-y-3">
               <div className="flex items-center justify-between">
-                <h3 className="font-bold text-lg">Bloque {c.nombre_bloque}</h3>
+                <h3 className="font-bold text-base">Valores por defecto</h3>
+                <button
+                  onClick={() => setEditandoDefaults(true)}
+                  className="p-1.5 hover:bg-muted rounded-lg transition-colors text-muted-foreground hover:text-foreground"
+                  title="Editar valores por defecto"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
+              </div>
+              <p className="text-xs text-muted-foreground -mt-1">Bloques sin configuración personalizada</p>
+              <div className="flex flex-wrap gap-1.5">
+                <span className="inline-flex items-center gap-1 bg-muted rounded-full px-2.5 py-0.5 text-xs">
+                  <Clock className="h-3 w-3 text-muted-foreground" />
+                  {defaults.tiempo_maximo_prestamo_minutos} min
+                </span>
+                <span className="inline-flex items-center gap-1 bg-muted rounded-full px-2.5 py-0.5 text-xs">
+                  <RefreshCw className="h-3 w-3 text-muted-foreground" />
+                  c/ {defaults.intervalo_recordatorio_minutos} min
+                </span>
+                <span className="inline-flex items-center gap-1 bg-muted rounded-full px-2.5 py-0.5 text-xs">
+                  <Hash className="h-3 w-3 text-muted-foreground" />
+                  {defaults.max_recordatorios} recordatorios
+                </span>
+                <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs ${
+                  defaults.notificaciones_activas
+                    ? 'bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-400'
+                    : 'bg-muted text-muted-foreground'
+                }`}>
+                  <Bell className="h-3 w-3" />
+                  {defaults.notificaciones_activas ? 'Activas' : 'Inactivas'}
+                </span>
+              </div>
+            </div>
+          )}
+          {configs.map((c) => (
+            <div key={c.nombre_bloque} className="bg-card border border-border rounded-xl p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-base">Bloque {c.nombre_bloque}</h3>
                 <div className="flex gap-1">
-                  <button onClick={() => abrirEditor(c)} className="p-1.5 hover:bg-muted rounded" title="Editar">
-                    <Settings className="h-4 w-4" />
+                  <button
+                    onClick={() => abrirEditor(c)}
+                    className="p-1.5 hover:bg-muted rounded-lg transition-colors text-muted-foreground hover:text-foreground"
+                    title="Editar"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
                   </button>
-                  <button onClick={() => handleEliminar(c.nombre_bloque)} className="p-1.5 hover:bg-red-50 dark:hover:bg-red-950 rounded text-red-500" title="Eliminar">
-                    <Trash2 className="h-4 w-4" />
+                  <button
+                    onClick={() => handleEliminar(c.nombre_bloque)}
+                    className="p-1.5 hover:bg-red-50 dark:hover:bg-red-950 rounded-lg transition-colors text-muted-foreground hover:text-red-500"
+                    title="Eliminar"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
                   </button>
                 </div>
               </div>
-              <div className="text-sm space-y-1">
-                <p><span className="text-muted-foreground">Tiempo máx:</span> {c.tiempo_maximo_prestamo_minutos} min</p>
-                <p><span className="text-muted-foreground">Intervalo:</span> {c.intervalo_recordatorio_minutos} min</p>
-                <p><span className="text-muted-foreground">Máx recordatorios:</span> {c.max_recordatorios}</p>
-                <p>
-                  <span className="text-muted-foreground">Estado:</span>{' '}
-                  <span className={c.notificaciones_activas ? 'text-green-600' : 'text-red-500'}>
-                    {c.notificaciones_activas ? 'Activas' : 'Desactivadas'}
-                  </span>
-                </p>
+
+              <div className="flex flex-wrap gap-1.5">
+                <span className="inline-flex items-center gap-1 bg-muted rounded-full px-2.5 py-0.5 text-xs">
+                  <Clock className="h-3 w-3 text-muted-foreground" />
+                  {c.tiempo_maximo_prestamo_minutos} min
+                </span>
+                <span className="inline-flex items-center gap-1 bg-muted rounded-full px-2.5 py-0.5 text-xs">
+                  <RefreshCw className="h-3 w-3 text-muted-foreground" />
+                  c/ {c.intervalo_recordatorio_minutos} min
+                </span>
+                <span className="inline-flex items-center gap-1 bg-muted rounded-full px-2.5 py-0.5 text-xs">
+                  <Hash className="h-3 w-3 text-muted-foreground" />
+                  {c.max_recordatorios} recordatorios
+                </span>
+                <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs ${
+                  c.notificaciones_activas
+                    ? 'bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-400'
+                    : 'bg-muted text-muted-foreground'
+                }`}>
+                  <Bell className="h-3 w-3" />
+                  {c.notificaciones_activas ? 'Activas' : 'Inactivas'}
+                </span>
               </div>
             </div>
           ))}
