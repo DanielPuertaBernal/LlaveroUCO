@@ -16,6 +16,24 @@ function escapeLike(text) {
 }
 
 /**
+ * Tope de filas por sentencia INSERT multi-row de los upsert masivos de
+ * comunidad. Postgres rechaza una sentencia con más de 65535 parámetros
+ * bindeados; con 10 columnas eso permite ~6553 filas por sentencia. Se deja
+ * un margen amplio (500) para que cargas del ETL con miles/decenas de miles
+ * de registros se dividan en lotes en vez de fallar de golpe.
+ */
+const FILAS_POR_LOTE_UPSERT = 500;
+
+/** Divide un arreglo en sub-arreglos de tamaño `tamano`. */
+function enLotes(arreglo, tamano) {
+  const lotes = [];
+  for (let i = 0; i < arreglo.length; i += tamano) {
+    lotes.push(arreglo.slice(i, i + tamano));
+  }
+  return lotes;
+}
+
+/**
  * `tipo` calculado en lectura: 'docente' > 'empleado' > 'estudiante',
  * con fallback a la columna cruda `tipo` para filas viejas que no tienen
  * `es_estudiante`/`es_empleado` seteados (ej. las creadas por el fallback de
@@ -159,37 +177,44 @@ class ComunidadRepository extends BaseRepository {
     if (!registros.length) return { insertados: 0, actualizados: 0 };
 
     const cols = ['id', 'numero_documento', 'nombre', 'tipo', 'facultad', 'correo', 'id_carnet'];
-    const bindings = [];
-    const placeholders = registros
-      .map((r) => {
-        bindings.push(
-          newId(),
-          r.numero_documento,
-          r.nombre,
-          r.tipo,
-          r.facultad || '',
-          r.correo || '',
-          r.id_carnet || ''
-        );
-        return `(${cols.map(() => '?').join(', ')})`;
-      })
-      .join(', ');
+    let insertados = 0;
+    let actualizados = 0;
 
-    const sql = `
-      INSERT INTO ${TABLES.COMUNIDAD} (${cols.join(', ')})
-      VALUES ${placeholders}
-      ON CONFLICT (numero_documento) WHERE deleted_at IS NULL
-      DO UPDATE SET
-        nombre = EXCLUDED.nombre,
-        tipo = EXCLUDED.tipo,
-        facultad = EXCLUDED.facultad,
-        correo = EXCLUDED.correo,
-        id_carnet = EXCLUDED.id_carnet
-      RETURNING (xmax = 0) AS inserted
-    `;
-    const { rows } = await this.db.raw(sql, bindings);
-    const insertados = rows.filter((r) => r.inserted).length;
-    return { insertados, actualizados: rows.length - insertados };
+    for (const lote of enLotes(registros, FILAS_POR_LOTE_UPSERT)) {
+      const bindings = [];
+      const placeholders = lote
+        .map((r) => {
+          bindings.push(
+            newId(),
+            r.numero_documento,
+            r.nombre,
+            r.tipo,
+            r.facultad || '',
+            r.correo || '',
+            r.id_carnet || ''
+          );
+          return `(${cols.map(() => '?').join(', ')})`;
+        })
+        .join(', ');
+
+      const sql = `
+        INSERT INTO ${TABLES.COMUNIDAD} (${cols.join(', ')})
+        VALUES ${placeholders}
+        ON CONFLICT (numero_documento) WHERE deleted_at IS NULL
+        DO UPDATE SET
+          nombre = EXCLUDED.nombre,
+          tipo = EXCLUDED.tipo,
+          facultad = EXCLUDED.facultad,
+          correo = EXCLUDED.correo,
+          id_carnet = EXCLUDED.id_carnet
+        RETURNING (xmax = 0) AS inserted
+      `;
+      const { rows } = await this.db.raw(sql, bindings);
+      insertados += rows.filter((r) => r.inserted).length;
+      actualizados += rows.length - rows.filter((r) => r.inserted).length;
+    }
+
+    return { insertados, actualizados };
   }
 
   /**
@@ -219,24 +244,6 @@ class ComunidadRepository extends BaseRepository {
 
     const esEmpleado = fuente === 'empleado';
     const cols = ['id', 'numero_documento', 'nombre', 'tipo', 'facultad', 'correo', 'id_carnet', 'numero_contacto', 'es_estudiante', 'es_empleado'];
-    const bindings = [];
-    const placeholders = registros
-      .map((r) => {
-        bindings.push(
-          newId(),
-          r.numero_documento,
-          r.nombre,
-          fuente,
-          r.facultad || '',
-          r.correo || '',
-          r.id_carnet || '',
-          r.numero_contacto || '',
-          !esEmpleado,
-          esEmpleado
-        );
-        return `(${cols.map(() => '?').join(', ')})`;
-      })
-      .join(', ');
 
     const setDatosPersonales = esEmpleado
       ? `
@@ -252,19 +259,47 @@ class ComunidadRepository extends BaseRepository {
         numero_contacto = CASE WHEN ${TABLES.COMUNIDAD}.es_empleado THEN ${TABLES.COMUNIDAD}.numero_contacto ELSE EXCLUDED.numero_contacto END,
       `;
 
-    const sql = `
-      INSERT INTO ${TABLES.COMUNIDAD} (${cols.join(', ')})
-      VALUES ${placeholders}
-      ON CONFLICT (numero_documento) WHERE deleted_at IS NULL
-      DO UPDATE SET
-        nombre = EXCLUDED.nombre,
-        ${setDatosPersonales}
-        ${esEmpleado ? 'es_empleado' : 'es_estudiante'} = true
-      RETURNING (xmax = 0) AS inserted
-    `;
-    const { rows } = await this.db.raw(sql, bindings);
-    const insertados = rows.filter((r) => r.inserted).length;
-    return { insertados, actualizados: rows.length - insertados };
+    let insertados = 0;
+    let actualizados = 0;
+
+    // Se divide en lotes: una sola sentencia con decenas de miles de
+    // registros del ETL rompería el límite de 65535 parámetros de Postgres.
+    for (const lote of enLotes(registros, FILAS_POR_LOTE_UPSERT)) {
+      const bindings = [];
+      const placeholders = lote
+        .map((r) => {
+          bindings.push(
+            newId(),
+            r.numero_documento,
+            r.nombre,
+            fuente,
+            r.facultad || '',
+            r.correo || '',
+            r.id_carnet || '',
+            r.numero_contacto || '',
+            !esEmpleado,
+            esEmpleado
+          );
+          return `(${cols.map(() => '?').join(', ')})`;
+        })
+        .join(', ');
+
+      const sql = `
+        INSERT INTO ${TABLES.COMUNIDAD} (${cols.join(', ')})
+        VALUES ${placeholders}
+        ON CONFLICT (numero_documento) WHERE deleted_at IS NULL
+        DO UPDATE SET
+          nombre = EXCLUDED.nombre,
+          ${setDatosPersonales}
+          ${esEmpleado ? 'es_empleado' : 'es_estudiante'} = true
+        RETURNING (xmax = 0) AS inserted
+      `;
+      const { rows } = await this.db.raw(sql, bindings);
+      insertados += rows.filter((r) => r.inserted).length;
+      actualizados += rows.length - rows.filter((r) => r.inserted).length;
+    }
+
+    return { insertados, actualizados };
   }
 
   /** @param {object[]} registros @returns {Promise<{insertados: number, actualizados: number}>} */

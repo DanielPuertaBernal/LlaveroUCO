@@ -45,12 +45,6 @@ class ComunidadController {
     return res.status(201).json({ ok: true, data: { persona } });
   }
 
-  /** POST /api/comunidad/sync - Sincroniza registros desde sistema externo */
-  async sync(req, res) {
-    const resultado = await comunidadService.sync(req.body);
-    return res.json({ ok: true, message: 'Sincronización completada', data: resultado });
-  }
-
   /** POST /api/comunidad/sync/estudiantes - Sincroniza desde el sistema fuente de estudiantes */
   async syncEstudiantes(req, res) {
     const resultado = await comunidadService.syncEstudiantes(req.body);

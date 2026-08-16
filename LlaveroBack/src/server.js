@@ -23,7 +23,7 @@ const PORT = process.env.PORT || 3001;
 // intercambiar el code). SUPERADMIN_EMAIL tampoco es requerida: si no está
 // seteada, simplemente no se bootstrapea ningún superadmin (ver
 // `bootstrapSuperadmin` más abajo).
-const REQUIRED_ENV = ['JWT_SECRET', 'JWT_REFRESH_SECRET', 'ESP32_DEVICE_KEY'];
+const REQUIRED_ENV = ['JWT_SECRET', 'JWT_REFRESH_SECRET'];
 
 function validateEnv() {
   const missing = REQUIRED_ENV.filter((key) => !process.env[key]);

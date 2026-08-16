@@ -156,29 +156,6 @@ const schemas = {
       id_carnet: { type: 'string', example: 'ABC123' },
     },
   },
-  SyncRequest: {
-    type: 'object',
-    properties: {
-      registro: { $ref: '#/components/schemas/SyncRegistro' },
-      registros: {
-        type: 'array',
-        items: { $ref: '#/components/schemas/SyncRegistro' },
-      },
-    },
-  },
-  SyncRegistro: {
-    type: 'object',
-    required: ['numero_documento', 'nombre', 'tipo'],
-    properties: {
-      numero_documento: { type: 'string', example: '1234567890' },
-      nombre: { type: 'string', example: 'Juan Pérez' },
-      tipo: { type: 'string', enum: ['docente', 'estudiante', 'empleado'] },
-      facultad: { type: 'string' },
-      correo: { type: 'string' },
-      id_carnet: { type: 'string' },
-    },
-  },
-
   // ── Equipo ──────────────────────────────────────────────────────────────────
   Equipo: {
     type: 'object',

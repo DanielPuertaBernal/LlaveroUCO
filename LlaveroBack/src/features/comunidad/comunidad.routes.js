@@ -2,8 +2,11 @@
 const { Router } = require('express');
 const comunidadController = require('./comunidad.controller');
 const { requireAuth, requireAdmin } = require('../auth/auth.middleware');
+const { requireApiKey } = require('../../shared/middlewares/apiKey.middleware');
+const { syncLimiter } = require('../../shared/middlewares/rate.limiter');
 
 const router = Router();
+const requireSyncApiKey = requireApiKey('COMUNIDAD_SYNC_API_KEY');
 
 /**
  * @openapi
@@ -115,51 +118,14 @@ router.get('/:documento', ...requireAuth, (req, res) => comunidadController.obte
 
 /**
  * @openapi
- * /comunidad/sync:
+ * /comunidad:
  *   post:
  *     tags: [Comunidad]
- *     summary: Sincronizar registros desde sistema externo
- *     description: Acepta un registro individual o un arreglo de registros. No requiere autenticación.
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/SyncRequest'
- *     responses:
- *       200:
- *         description: Registros sincronizados
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 ok:
- *                   type: boolean
- *                 message:
- *                   type: string
- *                 data:
- *                   type: object
- *                   properties:
- *                     insertados:
- *                       type: integer
- *                     actualizados:
- *                       type: integer
- *                     errores:
- *                       type: array
- *                       items:
- *                         type: object
- *       400:
- *         description: Datos inválidos
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorValidacion'
+ *     summary: Crear una persona manualmente
+ *     security:
+ *       - BearerAuth: []
  */
 router.post('/', ...requireAuth, (req, res) => comunidadController.crear(req, res));
-
-// Endpoint de sincronización — sin autenticación (sistema externo)
-router.post('/sync', (req, res) => comunidadController.sync(req, res));
 
 /**
  * @openapi
@@ -167,12 +133,23 @@ router.post('/sync', (req, res) => comunidadController.sync(req, res));
  *   post:
  *     tags: [Comunidad]
  *     summary: Sincronizar registros desde el sistema fuente de estudiantes (ETL institucional)
- *     description: Acepta un registro individual o un arreglo de registros, sin campo `tipo`. No requiere autenticación.
+ *     description: >
+ *       Acepta un registro individual o un arreglo de registros, sin campo
+ *       `tipo`. Sin sesión de usuario (integración servidor-a-servidor):
+ *       requiere el header `X-Api-Key` con el valor de `COMUNIDAD_SYNC_API_KEY`.
+ *     parameters:
+ *       - in: header
+ *         name: X-Api-Key
+ *         required: true
+ *         schema:
+ *           type: string
  *     responses:
  *       200:
  *         description: Registros sincronizados
+ *       401:
+ *         description: API key inválida o no proporcionada
  */
-router.post('/sync/estudiantes', (req, res) => comunidadController.syncEstudiantes(req, res));
+router.post('/sync/estudiantes', syncLimiter, requireSyncApiKey, (req, res) => comunidadController.syncEstudiantes(req, res));
 
 /**
  * @openapi
@@ -180,12 +157,23 @@ router.post('/sync/estudiantes', (req, res) => comunidadController.syncEstudiant
  *   post:
  *     tags: [Comunidad]
  *     summary: Sincronizar registros desde el sistema fuente de empleados/RRHH (ETL institucional)
- *     description: Acepta un registro individual o un arreglo de registros, sin campo `tipo`. No requiere autenticación.
+ *     description: >
+ *       Acepta un registro individual o un arreglo de registros, sin campo
+ *       `tipo`. Sin sesión de usuario (integración servidor-a-servidor):
+ *       requiere el header `X-Api-Key` con el valor de `COMUNIDAD_SYNC_API_KEY`.
+ *     parameters:
+ *       - in: header
+ *         name: X-Api-Key
+ *         required: true
+ *         schema:
+ *           type: string
  *     responses:
  *       200:
  *         description: Registros sincronizados
+ *       401:
+ *         description: API key inválida o no proporcionada
  */
-router.post('/sync/empleados', (req, res) => comunidadController.syncEmpleados(req, res));
+router.post('/sync/empleados', syncLimiter, requireSyncApiKey, (req, res) => comunidadController.syncEmpleados(req, res));
 
 router.patch('/:id', ...requireAdmin, (req, res) => comunidadController.actualizar(req, res));
 router.delete('/:id', ...requireAdmin, (req, res) => comunidadController.eliminar(req, res));

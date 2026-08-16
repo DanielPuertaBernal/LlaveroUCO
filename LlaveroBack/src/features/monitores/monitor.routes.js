@@ -2,10 +2,13 @@
 const { Router } = require('express');
 const { z } = require('zod');
 const monitorController = require('./monitor.controller');
-const { requireAuth } = require('../auth/auth.middleware');
+const { requireAuth, requireRole, ROLES } = require('../auth/auth.middleware');
 const { validate } = require('../../shared/middlewares/validate.middleware');
 
 const router = Router();
+
+// Sin caso de uso para portería: solo admin/auxiliar gestionan monitores.
+const requireAdminOrAux = [...requireAuth, requireRole(ROLES.ADMIN, ROLES.AUX)];
 
 const registrarSchema = z.object({
   numero_documento_docente: z.string().min(1, 'Documento del docente requerido'),
@@ -42,7 +45,7 @@ const registrarSchema = z.object({
  *                       items:
  *                         $ref: '#/components/schemas/Monitor'
  */
-router.get('/', ...requireAuth, (req, res) => monitorController.listar(req, res));
+router.get('/', ...requireAdminOrAux, (req, res) => monitorController.listar(req, res));
 
 /**
  * @openapi
@@ -63,7 +66,7 @@ router.get('/', ...requireAuth, (req, res) => monitorController.listar(req, res)
  *       200:
  *         description: Clases del docente
  */
-router.get('/clases/:documento', ...requireAuth, (req, res) => monitorController.clasesDocente(req, res));
+router.get('/clases/:documento', ...requireAdminOrAux, (req, res) => monitorController.clasesDocente(req, res));
 
 /**
  * @openapi
@@ -89,7 +92,7 @@ router.get('/clases/:documento', ...requireAuth, (req, res) => monitorController
  *             schema:
  *               $ref: '#/components/schemas/ErrorValidacion'
  */
-router.post('/', ...requireAuth, validate(registrarSchema), (req, res) => monitorController.registrar(req, res));
+router.post('/', ...requireAdminOrAux, validate(registrarSchema), (req, res) => monitorController.registrar(req, res));
 
 /**
  * @openapi
@@ -111,6 +114,6 @@ router.post('/', ...requireAuth, validate(registrarSchema), (req, res) => monito
  *       404:
  *         $ref: '#/components/schemas/ErrorNoEncontrado'
  */
-router.delete('/:id', ...requireAuth, (req, res) => monitorController.eliminar(req, res));
+router.delete('/:id', ...requireAdminOrAux, (req, res) => monitorController.eliminar(req, res));
 
 module.exports = router;
