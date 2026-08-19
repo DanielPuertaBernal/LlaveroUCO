@@ -1,8 +1,11 @@
 // Solo dígitos y letras — para documentos de identidad y carnets
 export const soloAlfanumerico = (v) => v.replace(/[^a-zA-Z0-9]/g, '');
 
-// Alfanumérico + guión — para códigos de inventario, salones y bloques (ej. "INV-M-303-001", "J-101")
-export const soloAlfanumericoConGuion = (v) => v.replace(/[^a-zA-Z0-9\-]/g, '');
+// Alfanumérico + espacio y unos pocos caracteres especiales de nombre — para
+// códigos de inventario, salones y bloques (ej. "INV-M-303-001", "J-101",
+// "Bloque M", "Aula 202 (Anexo)")
+export const soloAlfanumericoConGuion = (v) =>
+  v.replace(/[^a-zA-Z0-9áéíóúÁÉÍÓÚàèìòùÀÈÌÒÙñÑüÜ\s\-._()&]/g, '');
 
 // Solo letras, espacios, tildes, ñ, diéresis y guión — para nombres de personas
 export const soloNombre = (v) => v.replace(/[^a-zA-ZáéíóúÁÉÍÓÚàèìòùÀÈÌÒÙñÑüÜ\s\-']/g, '');
