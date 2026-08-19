@@ -11,6 +11,41 @@ const { createLogger } = require('../../shared/utils/logger');
 
 const logger = createLogger('Equipos');
 
+// Sin 0/O, 1/I/L — se prestan a confusión al leerlos o transcribirlos a mano.
+const ALFABETO_ALEATORIO = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+
+function codigoAleatorio(longitud = 6) {
+  let out = '';
+  for (let i = 0; i < longitud; i++) {
+    out += ALFABETO_ALEATORIO[Math.floor(Math.random() * ALFABETO_ALEATORIO.length)];
+  }
+  return out;
+}
+
+/**
+ * Genera el código de barras de un equipo. Si tiene `codigo_inventario`
+ * físico, usa ese como base (`INV-{codigo}-{consecutivo}`, comportamiento
+ * original, determinístico). Si no lo tiene (ej. equipos genéricos como
+ * "Extensión" o "Bafle" que nunca tuvieron placa de inventario), genera un
+ * código corto y aleatorio (`EQ-XXXXXX`) — no depende del largo del nombre
+ * (evita colisiones por truncado entre nombres parecidos) y, al ser
+ * independiente del nombre, no hay que regenerarlo si el equipo se renombra.
+ * Reintenta si por azar choca con uno ya existente.
+ */
+async function generarCodigoBarras({ codigo_inventario, consecutivo }) {
+  if (codigo_inventario) {
+    const codigoBase = String(codigo_inventario).split('-')[0];
+    const cons = String(parseInt(consecutivo, 10) || 0).padStart(3, '0');
+    return `INV-${codigoBase}-${cons}`;
+  }
+  for (let intento = 0; intento < 8; intento++) {
+    const candidato = `EQ-${codigoAleatorio()}`;
+    const existe = await equipoRepository.findByCodigoBarras(candidato);
+    if (!existe) return candidato;
+  }
+  throw ApiError.badRequest('No se pudo generar un código de barras único, intente de nuevo');
+}
+
 class EquipoService {
   async listar() { return equipoRepository.findAll(); }
   async disponibles() { return equipoRepository.findDisponibles(); }
@@ -42,8 +77,7 @@ class EquipoService {
       }
     }
     const cons = parseInt(consecutivo, 10);
-    const codigoBase = codigo_inventario ? String(codigo_inventario).split('-')[0] : '';
-    const codigo_barras = codigoBase ? `INV-${codigoBase}-${String(cons).padStart(3, '0')}` : '';
+    const codigo_barras = await generarCodigoBarras({ codigo_inventario, consecutivo: cons });
 
     try {
       return await equipoRepository.create({
@@ -91,9 +125,22 @@ class EquipoService {
 
     const codigoInventarioFinal = updates.codigo_inventario || actual.codigo_inventario;
     const consecutivoFinal = updates.consecutivo !== undefined ? updates.consecutivo : actual.consecutivo;
-    if (updates.codigo_inventario || updates.consecutivo !== undefined) {
-      const codigoBase = String(codigoInventarioFinal).split('-')[0] || codigoInventarioFinal;
-      updates.codigo_barras = `INV-${codigoBase}-${String(consecutivoFinal).padStart(3, '0')}`;
+    // El código aleatorio (equipo sin codigo_inventario) es independiente
+    // del nombre/consecutivo — no se regenera solo porque el equipo se
+    // renombra (eso invalidaría una etiqueta física ya impresa). Solo se
+    // recalcula cuando hay codigo_inventario de por medio (código
+    // determinístico INV-...) y cambió el código o el consecutivo, o si el
+    // equipo no tenía código de barras todavía.
+    if (codigoInventarioFinal && (updates.codigo_inventario !== undefined || updates.consecutivo !== undefined)) {
+      updates.codigo_barras = await generarCodigoBarras({
+        codigo_inventario: codigoInventarioFinal,
+        consecutivo: consecutivoFinal,
+      });
+    } else if (!actual.codigo_barras) {
+      updates.codigo_barras = await generarCodigoBarras({
+        codigo_inventario: codigoInventarioFinal,
+        consecutivo: consecutivoFinal,
+      });
     }
 
     try {

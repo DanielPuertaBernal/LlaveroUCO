@@ -665,7 +665,9 @@ export default function PrestamosPage() {
                     {equiposSeleccionados.map((eq) => (
                       <div key={String(eq.id)} className="flex items-center justify-between px-3 py-2 text-sm">
                         <div>
-                          <p className="font-medium text-foreground">{eq.nombre}</p>
+                          <p className="font-medium text-foreground">
+                            {eq.nombre}{eq.consecutivo != null && <span className="text-muted-foreground"> #{eq.consecutivo}</span>}
+                          </p>
                           <p className="text-muted-foreground text-xs font-mono">{eq.codigo_barras || eq.codigo_inventario}</p>
                         </div>
                         <button type="button" onClick={() => quitarDelCarrito(eq.id)} className="text-destructive hover:text-destructive/80 text-xs font-semibold shrink-0">Quitar</button>
