@@ -68,7 +68,8 @@ class ReservasSemestralesRepository {
       .select(
         `${TABLES.V_PROGRAMACIONES}.*`,
         `${TABLES.PROGRAMACION_SEMESTRES}.codigo as semestre`,
-        'c_docente.numero_documento as numero_documento'
+        'c_docente.numero_documento as numero_documento',
+        `${TABLES.V_PROGRAMACIONES}.docente_nombre as docente`
       );
   }
 

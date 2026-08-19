@@ -225,7 +225,31 @@ class ReservasSemestralesService {
     // FK nullable si el documento no existe en comunidad — misma Decision 8
     // del diseño que aplica a `programacion.service.js`).
     const documentosUnicos = [...new Set(registros.map((r) => r.numero_documento).filter(Boolean))];
-    const personas = await comunidadRepository.findManyByDocumentos(documentosUnicos);
+    let personas = await comunidadRepository.findManyByDocumentos(documentosUnicos);
+    const documentosExistentes = new Set(personas.map((p) => String(p.numero_documento).trim()));
+
+    // Autocompletar `comunidad` con los responsables que trae el Excel de
+    // reservas semestrales pero que aún no existen en el catálogo — mismo
+    // criterio que `programacion.service.js.importarDesdeExcel` (Decision 8
+    // del diseño): la fuente del Excel ya es autoridad suficiente, no hace
+    // falta sincronización manual aparte para vincular docente_id.
+    const nombreDocumentoNuevo = new Map();
+    for (const r of registros) {
+      if (r.numero_documento && !documentosExistentes.has(r.numero_documento) && r.docente_nombre) {
+        if (!nombreDocumentoNuevo.has(r.numero_documento)) nombreDocumentoNuevo.set(r.numero_documento, r.docente_nombre);
+      }
+    }
+    if (nombreDocumentoNuevo.size) {
+      const nuevos = [...nombreDocumentoNuevo.entries()].map(([numero_documento, nombre]) => ({
+        numero_documento,
+        nombre,
+        tipo: 'docente',
+      }));
+      await comunidadRepository.upsertMany(nuevos);
+      logger.info('Responsables autocompletados en comunidad desde importación de reservas semestrales', { cantidad: nuevos.length });
+      personas = await comunidadRepository.findManyByDocumentos(documentosUnicos);
+    }
+
     const mapaPersona = Object.fromEntries(personas.map((p) => [String(p.numero_documento).trim(), p]));
 
     // Resolución best-effort de salon_id por nombre de aula (nullable FK).
@@ -240,7 +264,7 @@ class ReservasSemestralesService {
       const persona = mapaPersona[numero_documento];
       return {
         ...rest,
-        facultad: persona?.facultad || 'No aplica',
+        facultad: persona?.facultad || 'RESERVA SEMESTRAL',
         docente_id: persona?.id || null,
         salon_id: rest.aula ? (mapaSalonId[rest.aula] || null) : null,
       };
@@ -415,7 +439,7 @@ class ReservasSemestralesService {
     }
 
     const persona = await comunidadRepository.findByDocumento(datos.solicitante_documento);
-    const facultad = persona?.facultad || 'No aplica';
+    const facultad = persona?.facultad || 'RESERVA SEMESTRAL';
 
     const toMinCheck = (t) => { const [h, m] = String(t || '0:0').split(':').map(Number); return h * 60 + (m || 0); };
     for (const franja of datos.franjas) {
@@ -618,7 +642,7 @@ class ReservasSemestralesService {
     }
 
     const persona = await comunidadRepository.findByDocumento(datos.solicitante_documento);
-    const facultad = (persona && persona.facultad) || 'No aplica';
+    const facultad = (persona && persona.facultad) || 'RESERVA SEMESTRAL';
 
     const conflictosPorFranja = [];
     for (const franja of datos.franjas) {

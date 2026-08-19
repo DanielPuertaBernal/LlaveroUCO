@@ -140,10 +140,16 @@ function VistaSemestre({ semestre, onVolver, isAdmin }) {
     : clasesPorDia.filter((r) => String(r.aula || '').trim().toUpperCase() !== 'NO REQUIERE AULA');
   const loading = vistaCompleta ? loadingCompleta : loadingDia;
 
-  // Reservas filtradas por día en la vista admin
+  // Reservas filtradas por día en la vista admin. `r.dia` viene de la BD en
+  // minúsculas sin tilde (CHECK constraint de `programaciones`), mientras
+  // `diaSeleccionado`/DIAS usa el label capitalizado con tilde — sin
+  // normalizar, la comparación nunca calzaba y la pestaña "por día" siempre
+  // quedaba vacía.
+  const normalizarDiaCliente = (d) =>
+    String(d || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
   const reservasSinFiltrarPorBloque = vistaCompleta
     ? todasReservas
-    : todasReservas.filter((r) => r.dia === diaSeleccionado);
+    : todasReservas.filter((r) => normalizarDiaCliente(r.dia) === normalizarDiaCliente(diaSeleccionado));
 
   // Portería: solo debe ver las clases/reservas de los bloques que tiene
   // asignados (ej. Portería 1 → Bloque J no debe ver clases del Bloque M).
