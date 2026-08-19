@@ -32,7 +32,9 @@ class SalonService {
 
     await this._validarBloqueRegistrado(payload.nombre_bloque);
 
-    return salonRepository.create(payload);
+    const creado = await salonRepository.create(payload);
+    await this._vincularProgramacionExistente(creado.nombre_salon, creado.id);
+    return creado;
   }
 
   async actualizar(id, updates) {
@@ -54,6 +56,11 @@ class SalonService {
 
     const updated = await salonRepository.update(id, payload);
     if (!updated) throw ApiError.notFound('Salón no encontrado');
+
+    if (payload.nombre_salon && payload.nombre_salon !== current.nombre_salon) {
+      await this._vincularProgramacionExistente(updated.nombre_salon, updated.id);
+    }
+
     return updated;
   }
 
@@ -106,6 +113,20 @@ class SalonService {
     ]);
     const registrados = new Set(salones.map((s) => s.nombre_salon));
     return aulasEnProg.filter((a) => a && !registrados.has(a)).sort();
+  }
+
+  /**
+   * Vincula `salon_id` en las filas de `programaciones` que ya traían este
+   * nombre de aula como texto libre pero no tenían el FK resuelto (porque el
+   * salón no existía en el catálogo cuando se importó la programación).
+   * Evita depender de un backfill manual cada vez que se registra/renombra
+   * un salón.
+   */
+  async _vincularProgramacionExistente(nombreSalon, salonId) {
+    const vinculadas = await programacionRepository.vincularSalonPorNombre(nombreSalon, salonId);
+    if (vinculadas > 0) {
+      logger.info('Salón vinculado a programación existente', { salon: nombreSalon, filas: vinculadas });
+    }
   }
 
   async _validarBloqueRegistrado(nombreBloque) {
