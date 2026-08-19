@@ -97,6 +97,7 @@ function VistaSemestre({ semestre, onVolver, isAdmin }) {
   const [vistaCompleta, setVistaCompleta] = useState(false);
   const [diaSeleccionado, setDiaSeleccionado] = useState(today);
   const [activeTab, setActiveTab] = useState('clases');
+  const [filtroTipo, setFiltroTipo] = useState('ALL');
   const [detailRow, setDetailRow] = useState(null);
   const [editOpen, setEditOpen] = useState(false);
   const fileInputReservasRef = useRef(null);
@@ -439,6 +440,31 @@ function VistaSemestre({ semestre, onVolver, isAdmin }) {
         </div>
       )}
 
+      {/* Filtro por tipo (solo pestaña Clases) */}
+      {activeTab === 'clases' && (
+        <div className="flex gap-2 flex-wrap">
+          {[
+            { key: 'ALL', label: 'Todas' },
+            { key: 'regular', label: 'Clase' },
+            { key: 'semestral', label: 'Semestral' },
+            { key: 'fantasma', label: 'Fantasma' },
+          ].map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setFiltroTipo(t.key)}
+              className={cn(
+                'px-3 py-1.5 rounded-full text-sm font-medium transition-colors',
+                filtroTipo === t.key
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-card border border-border text-foreground hover:bg-muted'
+              )}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Tabs */}
       <div className="flex gap-1 border-b border-border">
         {['clases', 'reservas-semestrales'].map((tab) => (
@@ -487,7 +513,8 @@ function VistaSemestre({ semestre, onVolver, isAdmin }) {
               },
             }]),
           ]}
-          data={isAdmin ? [...registros, ...reservasFiltradas] : [...registros, ...reservasSemestralesDelDia]}
+          data={(isAdmin ? [...registros, ...reservasFiltradas] : [...registros, ...reservasSemestralesDelDia])
+            .filter((r) => filtroTipo === 'ALL' || r.tipo === filtroTipo)}
           loading={loading}
           searchable
           extraSearchKeys={['numero_documento']}
@@ -541,8 +568,11 @@ function VistaSemestre({ semestre, onVolver, isAdmin }) {
 
       {/* Sección de reservas semestrales del día (auxiliar) — integrada en la tabla principal */}
 
-      {/* Detail Modal */}
-      <Dialog open={!!detailRow} onOpenChange={(o) => !o && setDetailRow(null)}>
+      {/* Detail Modal — se oculta (sin desmontar detailRow) mientras Editar
+          está abierto: dos Dialog de Radix montados a la vez duplicaban el
+          overlay con backdrop-blur y el focus-trap, causando que el blur y
+          el foco se vieran inconsistentes. */}
+      <Dialog open={!!detailRow && !editOpen} onOpenChange={(o) => !o && setDetailRow(null)}>
         <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Detalle del registro</DialogTitle>
@@ -613,7 +643,7 @@ function VistaSemestre({ semestre, onVolver, isAdmin }) {
             );
           })()}
           <DialogFooter>
-            {isAdmin && ['programacion', 'fantasma'].includes(detailRow?.tipo) && (
+            {isAdmin && ['regular', 'fantasma'].includes(detailRow?.tipo) && (
               <Button size="sm" onClick={() => setEditOpen(true)}>
                 <Pencil className="h-3.5 w-3.5 mr-1" /> Editar
               </Button>

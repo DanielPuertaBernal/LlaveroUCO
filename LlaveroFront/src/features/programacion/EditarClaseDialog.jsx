@@ -283,11 +283,11 @@ export default function EditarClaseDialog({ open, onOpenChange, clase, semestre,
     }
   }
 
-  const esPrincipal = claseData?.tipo === 'programacion';
+  const esPrincipal = claseData?.tipo === 'regular';
   const esFantasma = claseData?.tipo === 'fantasma';
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange} modal={false}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto" onInteractOutside={(e) => e.preventDefault()}>
           <DialogHeader>
             <DialogTitle>Editar clase</DialogTitle>
