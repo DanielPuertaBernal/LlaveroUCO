@@ -1,7 +1,7 @@
 'use strict';
 const comunidadRepository = require('./comunidad.repository');
 const ApiError = require('../../shared/errors/api.error');
-const { normalizeDocumento } = require('../../shared/utils/normalize.helper');
+const { normalizeDocumento, normalizeCarnet } = require('../../shared/utils/normalize.helper');
 const { TIPOS_COMUNIDAD } = comunidadRepository;
 const { createLogger } = require('../../shared/utils/logger');
 
@@ -20,6 +20,7 @@ class ComunidadService {
   }
 
   async buscarPorCarnet(idCarnet) {
+    // normalizeCarnet ya se aplica dentro de comunidadRepository.findByCarnet
     const persona = await comunidadRepository.findByCarnet(idCarnet);
     if (!persona) throw ApiError.notFound('Persona no encontrada por carnet');
     return persona;
@@ -47,7 +48,7 @@ class ComunidadService {
       tipo,
       facultad: String(facultad || '').trim(),
       correo: String(correo || '').trim().toLowerCase(),
-      id_carnet: String(id_carnet || '').trim(),
+      id_carnet: normalizeCarnet(id_carnet),
       numero_contacto: String(numero_contacto || '').trim(),
     });
     logger.info('Persona creada manualmente', { documento: nueva.numero_documento, tipo: nueva.tipo });
@@ -106,6 +107,7 @@ class ComunidadService {
       throw ApiError.badRequest(`tipo debe ser uno de: ${TIPOS_COMUNIDAD.join(', ')}`);
     }
     if (actualizado.correo) actualizado.correo = actualizado.correo.toLowerCase();
+    if (actualizado.id_carnet !== undefined) actualizado.id_carnet = normalizeCarnet(actualizado.id_carnet);
     if (!Object.keys(actualizado).length) throw ApiError.badRequest('No hay campos para actualizar');
 
     return comunidadRepository.updateById(id, actualizado);
@@ -136,7 +138,7 @@ class ComunidadService {
       nombre: String(r.nombre).trim(),
       facultad: String(r.facultad || '').trim(),
       correo: String(r.correo || '').trim().toLowerCase(),
-      id_carnet: String(r.id_carnet || '').trim(),
+      id_carnet: normalizeCarnet(r.id_carnet),
       numero_contacto: String(r.numero_contacto || '').trim(),
     };
   }

@@ -2,6 +2,7 @@
 const BaseRepository = require('../../shared/db/base.repository');
 const { TABLES } = require('../../shared/db/tables');
 const { newId } = require('../../shared/db/id');
+const { normalizeCarnet } = require('../../shared/utils/normalize.helper');
 
 /**
  * Tipos válidos de persona en comunidad.tipo (antes CHECK vía Mongoose enum,
@@ -109,7 +110,7 @@ class ComunidadRepository extends BaseRepository {
   /** @param {string} idCarnet @returns {Promise<object|null>} */
   async findByCarnet(idCarnet) {
     const row = await this._readQuery()
-      .where({ id_carnet: String(idCarnet) })
+      .where({ id_carnet: normalizeCarnet(idCarnet) })
       .whereNull('deleted_at')
       .first();
     return row || null;
