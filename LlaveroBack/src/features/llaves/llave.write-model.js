@@ -2,6 +2,7 @@
 
 const ApiError = require('../../shared/errors/api.error');
 const pgClient = require('../../shared/db/pg.client');
+const reservaRepository = require('../reservas/reserva.repository');
 const {
   construirRegistrosPrestamo,
   construirDatosDevolucion,
@@ -93,6 +94,14 @@ async function persistirDevolucion({
   });
 
   const updated = await llaveRepository.updateDevolucion(registro.id, updates);
+
+  // Si esta llave venía de una reserva individual, la devolución cierra el
+  // ciclo — se marca la reserva como completada de inmediato en vez de
+  // esperar a que sincronizarEstadosVencidos() la alcance por vencimiento
+  // de horario (podía tardar horas mostrando "Pendiente" pese a que el
+  // préstamo ya había terminado).
+  await reservaRepository.completarPorRegistroLlaveId(registro.id);
+
   return {
     mensaje,
     registro: toClientFormat(toPlain(updated)),

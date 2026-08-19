@@ -101,6 +101,11 @@ export function useProcesarNFC() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['llaves'] });
       qc.invalidateQueries({ queryKey: ['programacion'] });
+      // Una entrega/devolución por NFC puede corresponder a una reserva
+      // individual (llave_entregada/estado en la tabla `reservas`) — sin
+      // esto, la lista de Reservas Individuales quedaba mostrando el estado
+      // previo a la entrega hasta que algo más disparara un refetch.
+      qc.invalidateQueries({ queryKey: ['reservas'] });
     },
   });
 }
@@ -112,6 +117,7 @@ export function useDevolverPorId() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['llaves'] });
       qc.invalidateQueries({ queryKey: ['novedades'] });
+      qc.invalidateQueries({ queryKey: ['reservas'] });
     },
   });
 }
@@ -123,6 +129,7 @@ export function useConfirmarAnticipado() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['llaves'] });
       qc.invalidateQueries({ queryKey: ['programacion'] });
+      qc.invalidateQueries({ queryKey: ['reservas'] });
     },
   });
 }

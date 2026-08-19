@@ -7,6 +7,13 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/shared/component
 import StatusBadge from '@/shared/components/ui/StatusBadge';
 import { cn } from '@/shared/lib/utils';
 import { ESTADOS } from './reservasConstants';
+import { ROLES } from '@/shared/constants';
+
+const ROL_LABEL = {
+  [ROLES.ADMIN]: 'Administrador',
+  [ROLES.PORTERIA]: 'Portería',
+  [ROLES.AUX]: 'Auxiliar',
+};
 
 function puedeCancelarReserva(row) {
   if (!row || !['pendiente', 'aprobada'].includes(row.estado)) return false;
@@ -164,9 +171,16 @@ export default function ReservasListaTab({
       />
 
       <Sheet open={!!reservaDetalle} onOpenChange={(open) => { if (!open) setReservaDetalle(null); }}>
-        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+        <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
           {reservaDetalle && (() => {
-            const { label, variant } = ESTADOS[reservaDetalle.estado] || { label: reservaDetalle.estado, variant: 'default' };
+            // Mismo cómputo que la columna Estado de la tabla — sin esto, el
+            // modal mostraba el estado crudo ('Pendiente') aunque la llave ya
+            // estuviera entregada y la reserva en curso, lo que contradecía
+            // visualmente a la sección "Llave" de más abajo.
+            const enCurso = isEnCurso(reservaDetalle) && reservaDetalle.llave_entregada;
+            const { label, variant } = enCurso
+              ? { label: 'En curso', variant: 'info' }
+              : (ESTADOS[reservaDetalle.estado] || { label: reservaDetalle.estado, variant: 'default' });
             const fecha = reservaDetalle.fecha
               ? new Date(reservaDetalle.fecha).toLocaleDateString('es-CO', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
               : '—';
@@ -186,67 +200,73 @@ export default function ReservasListaTab({
                     <StatusBadge variant={variant}>{label}</StatusBadge>
                   </div>
 
-                  <div className="bg-muted/50 rounded-lg p-4 space-y-2">
-                    <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Espacio</p>
-                    <p className="font-semibold text-foreground flex items-center gap-2">
-                      <School className="h-4 w-4 text-primary shrink-0" />
-                      {reservaDetalle.nombre_salon || '—'}
-                    </p>
-                    <p className="text-sm text-muted-foreground">Bloque {reservaDetalle.nombre_bloque || '—'}</p>
-                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="bg-muted/50 rounded-lg p-4 space-y-2">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Espacio</p>
+                      <p className="font-semibold text-foreground flex items-center gap-2">
+                        <School className="h-4 w-4 text-primary shrink-0" />
+                        {reservaDetalle.nombre_salon || '—'}
+                      </p>
+                      <p className="text-sm text-muted-foreground">Bloque {reservaDetalle.nombre_bloque || '—'}</p>
+                    </div>
 
-                  <div className="bg-muted/50 rounded-lg p-4 space-y-2">
-                    <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Fecha y horario</p>
-                    <p className="font-medium text-foreground capitalize">{fecha}</p>
-                    <p className="text-sm text-muted-foreground flex items-center gap-1.5">
-                      <Clock className="h-3.5 w-3.5" />
-                      {reservaDetalle.hora_inicio} – {reservaDetalle.hora_fin}
-                    </p>
-                  </div>
+                    <div className="bg-muted/50 rounded-lg p-4 space-y-2">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Fecha y horario</p>
+                      <p className="font-medium text-foreground capitalize">{fecha}</p>
+                      <p className="text-sm text-muted-foreground flex items-center gap-1.5">
+                        <Clock className="h-3.5 w-3.5" />
+                        {reservaDetalle.hora_inicio} – {reservaDetalle.hora_fin}
+                      </p>
+                    </div>
 
-                  <div className="bg-muted/50 rounded-lg p-4 space-y-2">
-                    <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Solicitante</p>
-                    <p className="font-medium text-foreground">{reservaDetalle.solicitante_nombre || '—'}</p>
-                    <p className="text-sm text-muted-foreground">Doc: {reservaDetalle.solicitante_documento || '—'}</p>
-                    {reservaDetalle.tipo_solicitante && (
-                      <p className="text-sm text-muted-foreground capitalize">Tipo: {reservaDetalle.tipo_solicitante}</p>
+                    <div className="bg-muted/50 rounded-lg p-4 space-y-2">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Solicitante</p>
+                      <p className="font-medium text-foreground">{reservaDetalle.solicitante_nombre || '—'}</p>
+                      <p className="text-sm text-muted-foreground">Doc: {reservaDetalle.solicitante_documento || '—'}</p>
+                      {reservaDetalle.tipo_solicitante && (
+                        <p className="text-sm text-muted-foreground capitalize">Tipo: {reservaDetalle.tipo_solicitante}</p>
+                      )}
+                    </div>
+
+                    <div className="bg-muted/50 rounded-lg p-4 space-y-2">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium flex items-center gap-1.5">
+                        <Key className="h-3.5 w-3.5" /> Llave
+                      </p>
+                      <p className="text-sm text-foreground">
+                        {reservaDetalle.entregar_llave === false ? 'Reclama la llave después' : 'Entrega inmediata al reservar'}
+                      </p>
+                      <p className={cn('text-sm font-medium', reservaDetalle.llave_entregada ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground')}>
+                        {reservaDetalle.llave_entregada ? '✓ Llave entregada' : 'Llave no entregada aún'}
+                      </p>
+                    </div>
+
+                    {reservaDetalle.motivo && (
+                      <div className="bg-muted/50 rounded-lg p-4 space-y-1">
+                        <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Motivo</p>
+                        <p className="text-sm text-foreground">{reservaDetalle.motivo}</p>
+                      </div>
+                    )}
+
+                    {(reservaDetalle.responsable_nombre || reservaDetalle.responsable_documento) && (
+                      <div className="bg-muted/50 rounded-lg p-4 space-y-1">
+                        <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Responsable</p>
+                        <p className="text-sm text-foreground">{reservaDetalle.responsable_nombre || '—'}</p>
+                        <p className="text-sm text-muted-foreground">Doc: {reservaDetalle.responsable_documento || '—'}</p>
+                      </div>
+                    )}
+
+                    {(reservaDetalle.aprobado_por || reservaDetalle.creado_por_rol) && (
+                      <div className="bg-muted/50 rounded-lg p-4 space-y-1 sm:col-span-2">
+                        <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Gestión</p>
+                        {reservaDetalle.aprobado_por && <p className="text-sm text-foreground">Aprobado/rechazado por: {reservaDetalle.aprobado_por}</p>}
+                        {reservaDetalle.creado_por_rol && (
+                          <p className="text-sm text-muted-foreground">
+                            Creado por: {ROL_LABEL[reservaDetalle.creado_por_rol] || reservaDetalle.creado_por_rol}
+                          </p>
+                        )}
+                      </div>
                     )}
                   </div>
-
-                  <div className="bg-muted/50 rounded-lg p-4 space-y-2">
-                    <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium flex items-center gap-1.5">
-                      <Key className="h-3.5 w-3.5" /> Llave
-                    </p>
-                    <p className="text-sm text-foreground">
-                      {reservaDetalle.entregar_llave === false ? 'Reclama la llave después' : 'Entrega inmediata al reservar'}
-                    </p>
-                    <p className={cn('text-sm font-medium', reservaDetalle.llave_entregada ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground')}>
-                      {reservaDetalle.llave_entregada ? '✓ Llave entregada' : 'Llave no entregada aún'}
-                    </p>
-                  </div>
-
-                  {reservaDetalle.motivo && (
-                    <div className="bg-muted/50 rounded-lg p-4 space-y-1">
-                      <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Motivo</p>
-                      <p className="text-sm text-foreground">{reservaDetalle.motivo}</p>
-                    </div>
-                  )}
-
-                  {(reservaDetalle.responsable_nombre || reservaDetalle.responsable_documento) && (
-                    <div className="bg-muted/50 rounded-lg p-4 space-y-1">
-                      <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Responsable</p>
-                      <p className="text-sm text-foreground">{reservaDetalle.responsable_nombre || '—'}</p>
-                      <p className="text-sm text-muted-foreground">Doc: {reservaDetalle.responsable_documento || '—'}</p>
-                    </div>
-                  )}
-
-                  {(reservaDetalle.aprobado_por || reservaDetalle.creado_por_rol) && (
-                    <div className="bg-muted/50 rounded-lg p-4 space-y-1">
-                      <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Gestión</p>
-                      {reservaDetalle.aprobado_por && <p className="text-sm text-foreground">Aprobado/rechazado por: {reservaDetalle.aprobado_por}</p>}
-                      {reservaDetalle.creado_por_rol && <p className="text-sm text-muted-foreground">Creado por rol: {reservaDetalle.creado_por_rol}</p>}
-                    </div>
-                  )}
 
                   <p className="text-xs text-muted-foreground text-right">Registrada: {creado}</p>
                 </div>

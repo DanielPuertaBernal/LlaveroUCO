@@ -134,6 +134,23 @@ class ReservaRepository {
    * @param {string} id @param {object} updates
    * @returns {Promise<object|null>}
    */
+  /**
+   * Cierra inmediatamente la reserva vinculada a una llave cuando esa llave
+   * se devuelve — sin esto, `estado` se quedaba en 'pendiente' hasta que
+   * `sincronizarEstadosVencidos` la alcanzara por vencimiento de horario
+   * (podía tardar horas), aunque el préstamo ya estuviera completo.
+   * No toca reservas que ya estén en un estado terminal (cancelada/rechazada).
+   * @param {string} registroLlaveId
+   * @returns {Promise<number>} filas actualizadas (0 o 1)
+   */
+  async completarPorRegistroLlaveId(registroLlaveId) {
+    return this.db(TABLES.RESERVAS)
+      .where({ registro_llave_id: registroLlaveId })
+      .whereIn('estado', ['pendiente', 'aprobada'])
+      .whereNull('deleted_at')
+      .update({ estado: 'completada', checkin_estado: 'nfc_en_tiempo' });
+  }
+
   async updateById(id, updates) {
     const payload = {};
 
