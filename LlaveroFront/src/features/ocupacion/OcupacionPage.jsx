@@ -391,6 +391,13 @@ export default function OcupacionPage() {
       resumen.porBloque.forEach((r) => filasBloque.push([r.nombre, Number(r.pct.toFixed(2)), r.aulas]));
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(filasBloque), 'Por Bloque');
 
+      // Hoja "Docencia": carga de cada docente, sobre el mismo filtro activo.
+      const filasDocencia = [['DOCENTE', 'HORAS/SEMANA', 'MATERIAS', 'AULAS', 'FACULTADES']];
+      docentesFiltrados.forEach((d) => filasDocencia.push([
+        d.docente, d.horasSemanales, d.materias.length, d.aulas.length, d.facultades.join(' / '),
+      ]));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(filasDocencia), 'Docencia');
+
       const nombreSemestre = (data?.semestre || 'actual').replace(/[^a-zA-Z0-9-]/g, '_');
       XLSX.writeFile(wb, `ocupacion_${nombreSemestre}.xlsx`);
     } catch (e) {
@@ -555,7 +562,7 @@ export default function OcupacionPage() {
       <div className="flex gap-1 border-b border-border">
         {[
           { key: 'matriz', label: 'Matriz de Ocupación' },
-          { key: 'resumen', label: 'Resumen' },
+          { key: 'resumen', label: 'Análisis' },
           { key: 'docencia', label: 'Carga Docente' },
         ].map((t) => (
           <button
