@@ -242,21 +242,32 @@ export default function OcupacionPage() {
     return aulasDelBloque.filter((n) => n.toUpperCase().includes(q));
   }, [aulasDelBloque, buscarAula]);
 
+  // Facultad y Bloque son filtros globales (afectan Matriz, Análisis, Carga
+  // Docente y el KPI de encabezado). El multi-select de Aula, en cambio, es
+  // un drill-down exclusivo del tab "Matriz de Ocupación" (solo se puede
+  // editar ahí, ver más abajo) — no debe alterar el KPI global ni las
+  // agregaciones del tab Análisis, o de lo contrario quedan mostrando datos
+  // parciales de una selección hecha en otro tab sin ningún indicio visual.
   const aulasFiltradas = useMemo(() => {
     return Object.entries(aulas)
       .filter(([, a]) => facultad === 'ALL' || (a.facultades || []).includes(facultad))
       .filter(([, a]) => bloque === 'ALL' || (a.bloque || 'SIN BLOQUE') === bloque)
-      .filter(([nombre]) => aulasSeleccionadas.length === 0 || aulasSeleccionadas.includes(nombre))
       .sort(([a], [b]) => a.localeCompare(b));
-  }, [aulas, facultad, bloque, aulasSeleccionadas]);
+  }, [aulas, facultad, bloque]);
+
+  // Igual que aulasFiltradas, pero además acotado por el multi-select de
+  // Aula — usado solo por la tabla del tab Matriz y su export.
+  const aulasMatriz = useMemo(() => {
+    return aulasFiltradas.filter(([nombre]) => aulasSeleccionadas.length === 0 || aulasSeleccionadas.includes(nombre));
+  }, [aulasFiltradas, aulasSeleccionadas]);
 
   // Reinicia a la página 1 cuando cambia el filtro — evita quedar en una
   // página vacía si el filtro anterior tenía más resultados que el nuevo.
-  const totalPaginas = Math.max(1, Math.ceil(aulasFiltradas.length / AULAS_POR_PAGINA));
+  const totalPaginas = Math.max(1, Math.ceil(aulasMatriz.length / AULAS_POR_PAGINA));
   const paginaSegura = Math.min(pagina, totalPaginas);
   const aulasPagina = useMemo(
-    () => aulasFiltradas.slice((paginaSegura - 1) * AULAS_POR_PAGINA, paginaSegura * AULAS_POR_PAGINA),
-    [aulasFiltradas, paginaSegura]
+    () => aulasMatriz.slice((paginaSegura - 1) * AULAS_POR_PAGINA, paginaSegura * AULAS_POR_PAGINA),
+    [aulasMatriz, paginaSegura]
   );
 
   // Con una facultad filtrada, la tabla debe mostrar solo las horas que ESA
@@ -361,7 +372,7 @@ export default function OcupacionPage() {
     try {
       const XLSX = await import('xlsx');
       const rows = [['AULA', 'BLOQUE', 'FACULTAD', 'JORNADA', 'LUNES', 'MARTES', 'MIERCOLES', 'JUEVES', 'VIERNES', 'SABADO', 'SEMANAL']];
-      aulasFiltradas.forEach(([aula, a]) => {
+      aulasMatriz.forEach(([aula, a]) => {
         let sumD = 0, sumN = 0;
         const facultadesTexto = (a.facultades || []).join(' / ');
         const rowD = [aula, a.bloque || '', facultadesTexto, 'DIURNA (h)'];
@@ -688,7 +699,7 @@ export default function OcupacionPage() {
               {isLoading && (
                 <tr><td colSpan={9} className="px-3 py-6 text-center text-muted-foreground">Cargando...</td></tr>
               )}
-              {!isLoading && aulasFiltradas.length === 0 && (
+              {!isLoading && aulasMatriz.length === 0 && (
                 <tr><td colSpan={9} className="px-3 py-6 text-center text-muted-foreground">Sin datos para el filtro actual</td></tr>
               )}
               {aulasPagina.map(([aula, a], idx) => {
@@ -783,7 +794,7 @@ export default function OcupacionPage() {
         {totalPaginas > 1 && (
           <div className="flex items-center justify-between px-4 py-3 border-t border-border text-sm">
             <span className="text-muted-foreground">
-              Mostrando {(paginaSegura - 1) * AULAS_POR_PAGINA + 1}-{Math.min(paginaSegura * AULAS_POR_PAGINA, aulasFiltradas.length)} de {aulasFiltradas.length} aulas
+              Mostrando {(paginaSegura - 1) * AULAS_POR_PAGINA + 1}-{Math.min(paginaSegura * AULAS_POR_PAGINA, aulasMatriz.length)} de {aulasMatriz.length} aulas
             </span>
             <div className="flex items-center gap-2">
               <Button variant="outline" size="sm" onClick={() => setPagina((p) => Math.max(1, p - 1))} disabled={paginaSegura <= 1}>
