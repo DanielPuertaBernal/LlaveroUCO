@@ -203,6 +203,11 @@ export default function OcupacionPage() {
   const [buscarAula, setBuscarAula] = useState('');
   const CHIPS_VISIBLES = 12;
   const [vista, setVista] = useState('matriz');
+  const [buscarDocente, setBuscarDocente] = useState('');
+  const [paginaDocentes, setPaginaDocentes] = useState(1);
+  const DOCENTES_POR_PAGINA = 15;
+  const [detalleDocente, setDetalleDocente] = useState(null);
+  const [detalleDocenteTab, setDetalleDocenteTab] = useState('materias');
   const [franjaDetalle, setFranjaDetalle] = useState(null); // { aula, dia }
   const [mostrarExplicacion86h, setMostrarExplicacion86h] = useState(false);
   const { data: clasesFranja = [], isLoading: cargandoFranja } = useDetalleAulaDia(
@@ -210,6 +215,7 @@ export default function OcupacionPage() {
   );
 
   const aulas = data?.aulas || {};
+  const docentes = data?.docentes || [];
 
   const { facultades, bloques } = useMemo(() => {
     const fs = new Set();
@@ -257,6 +263,25 @@ export default function OcupacionPage() {
   // facultad ocupa en el aula, no el total del aula (todas las facultades).
   const horasDiurna = (a, d) => (facultad !== 'ALL' && a.porFacultad?.[facultad] ? a.porFacultad[facultad].diurna[d] : a.diurna[d]) || 0;
   const horasNocturna = (a, d) => (facultad !== 'ALL' && a.porFacultad?.[facultad] ? a.porFacultad[facultad].nocturna[d] : a.nocturna[d]) || 0;
+
+  // Docentes con carga en al menos un aula del bloque filtrado (si hay uno) y
+  // que dictan en la facultad filtrada (si hay una) — mismo criterio de
+  // filtrado que aulasFiltradas, aplicado sobre el listado de docentes.
+  const docentesFiltrados = useMemo(() => {
+    const aulasDelBloqueSet = bloque === 'ALL' ? null : new Set(aulasDelBloque);
+    const q = buscarDocente.trim().toUpperCase();
+    return docentes
+      .filter((d) => facultad === 'ALL' || d.facultades.includes(facultad))
+      .filter((d) => !aulasDelBloqueSet || d.aulas.some((a) => aulasDelBloqueSet.has(a)))
+      .filter((d) => !q || d.docente.toUpperCase().includes(q));
+  }, [docentes, facultad, bloque, aulasDelBloque, buscarDocente]);
+
+  const totalPaginasDocentes = Math.max(1, Math.ceil(docentesFiltrados.length / DOCENTES_POR_PAGINA));
+  const paginaDocentesSegura = Math.min(paginaDocentes, totalPaginasDocentes);
+  const docentesPagina = useMemo(
+    () => docentesFiltrados.slice((paginaDocentesSegura - 1) * DOCENTES_POR_PAGINA, paginaDocentesSegura * DOCENTES_POR_PAGINA),
+    [docentesFiltrados, paginaDocentesSegura]
+  );
 
   const kpiGlobal = useMemo(() => {
     if (!aulasFiltradas.length) return 0;
@@ -381,7 +406,7 @@ export default function OcupacionPage() {
         <div>
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
             <Activity className="h-6 w-6 text-primary" />
-            Ocupación de Aulas
+            Indicadores
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
             Diurna 7:00-18:00 y Nocturna 18:00-22:00 (Lun-Vie) · Sábados solo diurna · Domingos sin servicio.
@@ -458,7 +483,7 @@ export default function OcupacionPage() {
             </FormField>
           </div>
 
-          {vista !== 'resumen' && (
+          {vista === 'matriz' && (
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-foreground">
@@ -531,6 +556,7 @@ export default function OcupacionPage() {
         {[
           { key: 'matriz', label: 'Matriz de Ocupación' },
           { key: 'resumen', label: 'Resumen' },
+          { key: 'docencia', label: 'Carga Docente' },
         ].map((t) => (
           <button
             key={t.key}
@@ -766,6 +792,83 @@ export default function OcupacionPage() {
       </div>
       )}
 
+      {/* Carga docente — horas semanales, materias y aulas por docente, sobre los mismos filtros de facultad/bloque */}
+      {vista === 'docencia' && (
+        <div className="bg-card border border-border rounded-xl p-4 space-y-3">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">Carga docente</h3>
+              <p className="text-[11px] text-muted-foreground">
+                Horas semanales dictadas, materias/grupos distintos y aulas usadas por cada docente, según los filtros activos.
+              </p>
+            </div>
+            <div className="relative w-full sm:w-56">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Buscar docente..."
+                value={buscarDocente}
+                onChange={(e) => { setBuscarDocente(e.target.value); setPaginaDocentes(1); }}
+                className="w-full h-8 pl-8 pr-3 rounded-lg border border-input bg-background text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+          </div>
+          {isLoading && <p className="text-sm text-muted-foreground text-center py-10">Cargando...</p>}
+          {!isLoading && docentesFiltrados.length === 0 && (
+            <p className="text-sm text-muted-foreground text-center py-10">Sin datos para el filtro actual</p>
+          )}
+          {!isLoading && docentesFiltrados.length > 0 && (
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm border-collapse">
+                  <thead>
+                    <tr className="border-b border-border text-left text-xs text-muted-foreground uppercase tracking-wide">
+                      <th className="px-3 py-2">Docente</th>
+                      <th className="px-3 py-2 text-center">Horas/semana</th>
+                      <th className="px-3 py-2 text-center">Materias</th>
+                      <th className="px-3 py-2 text-center">Aulas</th>
+                      <th className="px-3 py-2">Facultades</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {docentesPagina.map((d, idx) => (
+                      <tr
+                        key={d.docente}
+                        onDoubleClick={() => { setDetalleDocente(d); setDetalleDocenteTab('materias'); }}
+                        title="Doble click para ver el detalle"
+                        className={cn('border-b border-border/60 cursor-pointer hover:bg-muted/60 transition-colors', idx % 2 === 1 ? 'bg-muted/40' : 'bg-card')}
+                      >
+                        <td className="px-3 py-2 font-medium text-foreground">{d.docente}</td>
+                        <td className="px-3 py-2 text-center">{fmtH(d.horasSemanales)}h</td>
+                        <td className="px-3 py-2 text-center">{d.materias.length}</td>
+                        <td className="px-3 py-2 text-center">{d.aulas.length}</td>
+                        <td className="px-3 py-2 text-muted-foreground text-xs max-w-[220px] truncate">{d.facultades.join(', ')}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {totalPaginasDocentes > 1 && (
+                <div className="flex items-center justify-between px-1 py-1 border-t border-border text-sm pt-3">
+                  <span className="text-muted-foreground">
+                    Mostrando {(paginaDocentesSegura - 1) * DOCENTES_POR_PAGINA + 1}-{Math.min(paginaDocentesSegura * DOCENTES_POR_PAGINA, docentesFiltrados.length)} de {docentesFiltrados.length} docentes
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setPaginaDocentes((p) => Math.max(1, p - 1))} disabled={paginaDocentesSegura <= 1}>
+                      Anterior
+                    </Button>
+                    <span className="text-muted-foreground px-1">{paginaDocentesSegura} / {totalPaginasDocentes}</span>
+                    <Button variant="outline" size="sm" onClick={() => setPaginaDocentes((p) => Math.min(totalPaginasDocentes, p + 1))} disabled={paginaDocentesSegura >= totalPaginasDocentes}>
+                      Siguiente
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
       {/* Detalle de estudiantes por aula (doble click en una fila) */}
       <Sheet open={!!detalleAula} onOpenChange={(v) => !v && setDetalleAula(null)}>
         <SheetContent className="max-w-2xl">
@@ -918,6 +1021,107 @@ export default function OcupacionPage() {
               </>
             );
           })()}
+        </SheetContent>
+      </Sheet>
+
+      {/* Detalle de un docente (doble click en una fila de Carga Docente) */}
+      <Sheet open={!!detalleDocente} onOpenChange={(v) => !v && setDetalleDocente(null)}>
+        <SheetContent className="max-w-2xl">
+          {detalleDocente && (
+            <>
+              <SheetHeader>
+                <SheetTitle>{detalleDocente.docente}</SheetTitle>
+                <SheetDescription>{fmtH(detalleDocente.horasSemanales)}h semanales · {detalleDocente.materias.length} materia(s) · {detalleDocente.aulas.length} aula(s)</SheetDescription>
+              </SheetHeader>
+              <div className="space-y-4 text-sm">
+                <div>
+                  <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Facultades</h4>
+                  <div className="flex flex-wrap gap-1.5">
+                    {detalleDocente.facultades.map((f) => (
+                      <span key={f} className="rounded-full bg-muted px-2.5 py-1 text-xs text-foreground">{f}</span>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex gap-1 border-b border-border">
+                  {[
+                    { key: 'materias', label: `Materias (${detalleDocente.materias.length})` },
+                    { key: 'aulas', label: `Aulas y Horarios (${detalleDocente.franjas.length})` },
+                  ].map((t) => (
+                    <button
+                      key={t.key}
+                      type="button"
+                      onClick={() => setDetalleDocenteTab(t.key)}
+                      className={cn(
+                        'px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
+                        detalleDocenteTab === t.key
+                          ? 'border-primary text-primary'
+                          : 'border-transparent text-muted-foreground hover:text-foreground'
+                      )}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+
+                {detalleDocenteTab === 'materias' && (
+                  <ul className="space-y-1">
+                    {detalleDocente.materias.map((m, i) => (
+                      <li key={i} className="rounded-lg border border-border px-3 py-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-foreground">{m.materia || 'Sin nombre'}</span>
+                          <span className="text-muted-foreground text-xs shrink-0 ml-2">
+                            {m.codigo_materia}{m.grupo ? ` · G${m.grupo}` : ''}
+                          </span>
+                        </div>
+                        {m.aulas?.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {m.aulas.map((a) => (
+                              <span key={a} className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">{a}</span>
+                            ))}
+                          </div>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {detalleDocenteTab === 'aulas' && (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm border-collapse">
+                      <thead>
+                        <tr className="border-b border-border text-left text-xs text-muted-foreground uppercase tracking-wide">
+                          <th className="px-2 py-1.5">Aula</th>
+                          <th className="px-2 py-1.5">Día</th>
+                          <th className="px-2 py-1.5">Horario</th>
+                          <th className="px-2 py-1.5 text-center">Horas</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {detalleDocente.franjas.map((f, i) => (
+                          <tr key={i} className={cn('border-b border-border/60', i % 2 === 1 ? 'bg-muted/40' : 'bg-card')}>
+                            <td className="px-2 py-1.5 font-medium text-foreground">{f.aula}</td>
+                            <td className="px-2 py-1.5 text-muted-foreground">{DIAS_LABEL[f.dia] || f.dia}</td>
+                            <td className="px-2 py-1.5 text-muted-foreground">{f.horaInicio} - {f.horaFin}</td>
+                            <td className="px-2 py-1.5 text-center text-muted-foreground">{fmtH(f.horas)}h</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="border-t border-border font-semibold text-foreground">
+                          <td className="px-2 py-1.5" colSpan={3}>Total</td>
+                          <td className="px-2 py-1.5 text-center">{fmtH(detalleDocente.horasSemanales)}h</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                )}
+              </div>
+              <SheetFooter>
+                <Button variant="outline" onClick={() => setDetalleDocente(null)}>Cerrar</Button>
+              </SheetFooter>
+            </>
+          )}
         </SheetContent>
       </Sheet>
 

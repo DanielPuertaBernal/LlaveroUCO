@@ -127,7 +127,7 @@ class ProgramacionRepository {
       .andWhere((qb) => qb.whereNull('ps.cancelada').orWhere('ps.cancelada', false))
       .select(
         'p.aula', 'p.dia', 'p.hora_inicio', 'p.hora_fin', 'p.facultad', 'p.total_estudiantes', 'p.tipo',
-        'b.nombre_bloque as bloque'
+        'b.nombre_bloque as bloque', 'p.docente_nombre as docente', 'p.materia', 'p.codigo_materia', 'p.grupo'
       );
     if (semestreCodigo) q.andWhere('sem.codigo', semestreCodigo);
     return q;

@@ -49,7 +49,7 @@ const adminGroups = [
     links: [
       { to: '/notificaciones', icon: Bell, label: 'Notificaciones' },
       { to: '/novedades', icon: AlertTriangle, label: 'Novedades' },
-      { to: '/ocupacion', icon: Activity, label: 'Ocupación de Aulas' },
+      { to: '/ocupacion', icon: Activity, label: 'Indicadores' },
     ],
   },
   {

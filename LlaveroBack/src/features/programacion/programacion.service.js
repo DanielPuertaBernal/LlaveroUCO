@@ -104,6 +104,7 @@ class ProgramacionService {
 
     const filas = await programacionRepository.findParaOcupacion(semestreCodigo);
     const aulas = {};
+    const docentes = {};
 
     const vacioPorDia = () => Object.fromEntries(DIAS_OCUPACION.map((d) => [DIA_LABEL[d], 0]));
 
@@ -157,13 +158,93 @@ class ProgramacionService {
         if (esNocturnaPrimaria) data.est_nocturna[label] += estudiantes;
         else data.est_diurna[label] += estudiantes;
       }
+
+      const nombreDocente = (fila.docente || '').trim();
+      if (nombreDocente && nombreDocente !== 'No asignado') {
+        // Programación regular y reservas semestrales vienen de Excels
+        // distintos que no siguen el mismo orden "APELLIDOS NOMBRES" —
+        // agrupar por el string exacto partía al mismo docente en dos
+        // filas (ej. "MUÑETON CANO EDWIN HUMBERTO" vs "EDWIN HUMBERTO
+        // MUÑETON CANO"). La clave de agrupación ignora el orden de las
+        // palabras; el nombre que se muestra prioriza el de tipo 'regular'
+        // (fuente más consistente) sobre el de reserva semestral.
+        const claveDocente = nombreDocente.toUpperCase().split(/\s+/).sort().join(' ');
+        if (!docentes[claveDocente]) {
+          docentes[claveDocente] = {
+            nombreDisplay: nombreDocente,
+            nombreEsRegular: fila.tipo === 'regular',
+            horasSemanales: 0,
+            aulas: new Set(),
+            facultades: new Set(),
+            // codigo_materia+grupo identifica una clase única (evita contar
+            // la misma materia repetida por cada franja horaria dentro de ella)
+            materias: new Map(),
+            // aula+día+horario identifica una franja única (una fila puede
+            // repetirse si vino de dos fuentes distintas con el mismo horario)
+            franjas: new Map(),
+          };
+        }
+        const dDocente = docentes[claveDocente];
+        if (fila.tipo === 'regular' && !dDocente.nombreEsRegular) {
+          dDocente.nombreDisplay = nombreDocente;
+          dDocente.nombreEsRegular = true;
+        }
+        const horasFranja = (finMin - inicioMin) / 60;
+        dDocente.horasSemanales += horasFranja;
+        dDocente.aulas.add(fila.aula);
+        if (fila.facultad) dDocente.facultades.add(fila.facultad);
+        const claveFranja = `${fila.aula}|${label}|${fila.hora_inicio}|${fila.hora_fin}`;
+        if (!dDocente.franjas.has(claveFranja)) {
+          dDocente.franjas.set(claveFranja, {
+            aula: fila.aula,
+            dia: label,
+            horaInicio: fila.hora_inicio,
+            horaFin: fila.hora_fin,
+            horas: horasFranja,
+          });
+        }
+        if (fila.codigo_materia || fila.materia) {
+          const claveMateria = `${fila.codigo_materia || ''}-${fila.grupo || ''}`;
+          if (!dDocente.materias.has(claveMateria)) {
+            dDocente.materias.set(claveMateria, {
+              codigo_materia: fila.codigo_materia || null,
+              materia: fila.materia || null,
+              grupo: fila.grupo || null,
+              aulas: new Set(),
+            });
+          }
+          dDocente.materias.get(claveMateria).aulas.add(fila.aula);
+        }
+      }
     }
 
     for (const data of Object.values(aulas)) {
       data.facultades = Object.keys(data.horasPorFacultad).sort();
     }
 
-    return { semestre: semestreCodigo, totalAulas: Object.keys(aulas).length, aulas };
+    const ordenDia = DIAS_OCUPACION.map((d) => DIA_LABEL[d]);
+    const docentesLista = Object.values(docentes)
+      .map((d) => ({
+        docente: d.nombreDisplay,
+        horasSemanales: Math.round(d.horasSemanales * 100) / 100,
+        aulas: [...d.aulas].sort(),
+        facultades: [...d.facultades].sort(),
+        materias: [...d.materias.values()].map((m) => ({ ...m, aulas: [...m.aulas].sort() })),
+        franjas: [...d.franjas.values()].sort((a, b) => {
+          if (a.aula !== b.aula) return a.aula.localeCompare(b.aula);
+          const diaCmp = ordenDia.indexOf(a.dia) - ordenDia.indexOf(b.dia);
+          if (diaCmp !== 0) return diaCmp;
+          return a.horaInicio.localeCompare(b.horaInicio);
+        }),
+      }))
+      .sort((a, b) => b.horasSemanales - a.horasSemanales);
+
+    return {
+      semestre: semestreCodigo,
+      totalAulas: Object.keys(aulas).length,
+      aulas,
+      docentes: docentesLista,
+    };
   }
 
   /**
