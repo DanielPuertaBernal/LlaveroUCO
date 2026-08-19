@@ -20,6 +20,9 @@ const {
   agruparClasesConsecutivas,
 } = require('./llave.domain');
 
+/** Placeholders del Excel de programación sin llave física real detrás. */
+const AULAS_SIN_LLAVE = new Set(['NO REQUIERE AULA', 'PENDIENTE']);
+
 /**
  * Mapea una reserva semestral al formato de clase esperado por los workflows de llaves.
  * @param {object} reserva
@@ -84,12 +87,17 @@ async function obtenerFranjasDelDiaDocente(documento, diaActual, fecha) {
     reservaRepository.findPendientesNFCByDocumentoYFecha(documento, fecha),
   ]);
 
-  // Las clases "NO REQUIERE AULA" no tienen llave física asociada — ver nota
-  // en `resolverContextoNFC` (evita que `encontrarClaseActual` prefiera un
-  // bloque sin aula real sobre la clase física del docente).
+  // Las clases "NO REQUIERE AULA"/"PENDIENTE" no tienen llave física
+  // asociada — ver nota en `resolverContextoNFC` (evita que
+  // `encontrarClaseActual` prefiera un bloque sin aula real sobre la clase
+  // física del docente). Las marcadas `sin_entrega_llave` (ej. clases del
+  // Colegio Mauj, ver 020_programaciones_sin_entrega_llave.js) sí tienen
+  // aula real pero son solo indicativas — no deben ofrecerse en el flujo
+  // NFC de entrega/devolución.
   const clasesProgramacion = (todasClases || []).filter(
     (clase) => normalizarDocumento(clase.numero_documento) === documento
-      && normalizeAula(clase.aula) !== 'NO REQUIERE AULA'
+      && !AULAS_SIN_LLAVE.has(normalizeAula(clase.aula))
+      && !clase.sin_entrega_llave
   );
 
   const clasesSemestrales = (reservasSemestralesHoy || [])
