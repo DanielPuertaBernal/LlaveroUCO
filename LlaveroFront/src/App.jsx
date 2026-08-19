@@ -18,6 +18,7 @@ import ConfiguracionPage from '@/features/configuracion/ConfiguracionPage';
 import NotificacionesPage from '@/features/notificaciones/NotificacionesPage';
 import NovedadesPage from '@/features/novedades/NovedadesPage';
 import ReservasSemestralesPage from '@/features/reservas_semestrales/ReservasSemestralesPage';
+import OcupacionPage from '@/features/ocupacion/OcupacionPage';
 import ErrorBoundary from '@/shared/components/ErrorBoundary';
 import { ROLES } from '@/shared/constants';
 
@@ -55,6 +56,7 @@ export default function App() {
               <Route path="/salones" element={<SalonesPage />} />
               <Route path="/porteros" element={<PorterosPage />} />
               <Route path="/configuracion" element={<ConfiguracionPage />} />
+              <Route path="/ocupacion" element={<OcupacionPage />} />
             </Route>
           </Route>
         </Route>

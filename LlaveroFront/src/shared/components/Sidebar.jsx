@@ -12,6 +12,7 @@ import {
   Key,
   Package,
   ShieldCheck,
+  Activity,
   UserCircle,
   LogOut,
   ChevronLeft,
@@ -48,6 +49,7 @@ const adminGroups = [
     links: [
       { to: '/notificaciones', icon: Bell, label: 'Notificaciones' },
       { to: '/novedades', icon: AlertTriangle, label: 'Novedades' },
+      { to: '/ocupacion', icon: Activity, label: 'Ocupación de Aulas' },
     ],
   },
   {
@@ -115,7 +117,7 @@ export default function Sidebar({ usuario, collapsed, onToggle, onLogout, mobile
       : usuario?.rol === ROLES.PORTERIA
         ? porteriaGroups
         : auxGroups;
-  const [openGroups, setOpenGroups] = useState({});
+  const [openGroups, setOpenGroups] = useState({ Operaciones: true, Inventario: true, Reportes: true });
   const [collapsedPopover, setCollapsedPopover] = useState(null); // { label, top, left } | null
 
   function toggleGroup(label) {
