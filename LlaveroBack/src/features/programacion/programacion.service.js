@@ -332,8 +332,15 @@ class ProgramacionService {
   async exportar(semestre = null) {
     // Postgres: ya no hay _id/__v ni columnas exclusivas de otro subtipo
     // colgando del documento (table-per-type separa eso en su propia tabla);
-    // solo se excluyen columnas de conveniencia de la vista.
-    const CAMPOS_EXCLUIDOS_PROG = ['es_regular', 'consecutivo', 'cancelada', 'fecha_cancelacion', 'motivo_cancelacion', 'grupo_id', 'creado_manualmente', 'tipo_solicitante', 'responsable_id', 'responsable_nombre', 'bloque_id'];
+    // solo se excluyen columnas de conveniencia de la vista. `es_intensivo`
+    // y `sin_entrega_llave` también se excluyen del detalle de cada fila:
+    // ya quedan implícitos en a cuál de las 3 hojas (Programacion/
+    // Intensivos/Colegio) pertenece la fila.
+    const CAMPOS_EXCLUIDOS_PROG = [
+      'es_regular', 'consecutivo', 'cancelada', 'fecha_cancelacion', 'motivo_cancelacion',
+      'grupo_id', 'creado_manualmente', 'tipo_solicitante', 'responsable_id', 'responsable_nombre',
+      'bloque_id', 'es_intensivo', 'sin_entrega_llave',
+    ];
     const CAMPOS_EXCLUIDOS_SEM = ['es_regular', 'tipo', 'fantasma_de_programacion_id', 'fantasma_de_codigo_materia'];
 
     const [registrosProg, registrosSem] = await Promise.all([
@@ -350,7 +357,7 @@ class ProgramacionService {
       }
     });
 
-    const datosProg = registrosProg.map((r) => {
+    const formatearFila = (r) => {
       const obj = { ...r };
       CAMPOS_EXCLUIDOS_PROG.forEach((c) => delete obj[c]);
       // Asegurar orden: observaciones → fantasma_de → fantasmas_asociados al final
@@ -363,7 +370,13 @@ class ProgramacionService {
           ? [...mapaFantasmas[r.codigo_materia]].join(', ')
           : '',
       };
-    });
+    };
+
+    // Misma separación que los tabs de la UI (Clases/Intensivos/Colegio):
+    // una fila es intensivo o colegio, nunca las dos a la vez.
+    const datosProg = registrosProg.filter((r) => !r.es_intensivo && !r.sin_entrega_llave).map(formatearFila);
+    const datosIntensivos = registrosProg.filter((r) => r.es_intensivo).map(formatearFila);
+    const datosColegio = registrosProg.filter((r) => r.sin_entrega_llave).map(formatearFila);
 
     const datosSem = registrosSem.map((r) => {
       const obj = { ...r };
@@ -373,12 +386,41 @@ class ProgramacionService {
 
     return generateExcelMultiSheet([
       { name: 'Programacion', data: datosProg },
+      { name: 'Intensivos', data: datosIntensivos },
+      { name: 'Colegio', data: datosColegio },
       { name: 'Semestrales', data: datosSem },
     ]);
   }
 
   async importarDesdeExcel(buffer, cargadoPor = '') {
-    const rows = parseExcel(buffer);
+    const rowsPrincipal = parseExcel(buffer);
+    // La hoja "INTENSIVO" trae las mismas columnas que la hoja principal
+    // (cursos intensivos con su propio bloque de fechas) — se consolida con
+    // el resto de filas y sigue el mismo camino de limpieza/fantasmas. No
+    // todos los archivos traen esta hoja, así que su ausencia no es un error.
+    let rowsIntensivo = [];
+    try {
+      // Marca cada fila como intensiva antes de mezclarla con las regulares
+      // (`_limpiarProgramacion` lee `__esIntensivo` para setear `es_intensivo`).
+      rowsIntensivo = parseExcel(buffer, { sheet: 'INTENSIVO' }).map((r) => ({ ...r, __esIntensivo: true }));
+    } catch { /* hoja "INTENSIVO" no presente en este archivo */ }
+
+    // La hoja "DATOS TABLA" es una tabla pivote que junta TODAS las demás
+    // hojas (PREGRADO=hoja principal, INTENSIVO, DIPLOMADO, POSGRADOS) más
+    // un grupo propio "COLEGIO" (clases del Colegio Mauj en aulas de la
+    // universidad) que no existe en ninguna otra hoja. Solo se toma el
+    // subconjunto TIPO='COLEGIO' de ahí — el resto ya viene de sus hojas
+    // propias y se duplicaría. Estas filas quedan marcadas
+    // `sin_entrega_llave`: ocupan aula real (van a ocupación) pero no deben
+    // ofrecer el botón de entregar llave, solo quedar como indicativo.
+    let rowsColegio = [];
+    try {
+      rowsColegio = parseExcel(buffer, { sheet: 'DATOS TABLA' })
+        .filter((r) => String(r.TIPO || '').trim().toUpperCase() === 'COLEGIO')
+        .map((r) => ({ ...r, __sinEntregaLlave: true }));
+    } catch { /* hoja "DATOS TABLA" no presente en este archivo */ }
+
+    const rows = [...rowsPrincipal, ...rowsIntensivo, ...rowsColegio];
     if (!rows.length) throw ApiError.badRequest('El archivo Excel está vacío');
 
     const { validos: limpios, rechazados } = this._limpiarProgramacion(rows);
@@ -553,6 +595,10 @@ class ProgramacionService {
       'Hora Inicio': 'hora_inicio',
       'hora_fin': 'hora_fin',
       'Hora Fin': 'hora_fin',
+      // Columnas propias de la hoja "DATOS TABLA" (ya vienen limpias, sin
+      // necesidad de parsear "horario" con guion — ver filas COLEGIO).
+      'INICIO': 'hora_inicio',
+      'FIN': 'hora_fin',
       'aula': 'aula',
       'Aula': 'aula',
       'descripcion': 'facultad',
@@ -641,6 +687,8 @@ class ProgramacionService {
       mapped._fecha_inicio_raw = row['fecha_inicio'] || row['Fecha Inicio'] || row['fecha_inicio_semestre'] || null;
       mapped._fecha_fin_raw = row['fecha_fin'] || row['Fecha Fin'] || row['fecha_fin_semestre'] || null;
       mapped.tipo = 'programacion';
+      mapped.es_intensivo = !!row.__esIntensivo;
+      mapped.sin_entrega_llave = !!row.__sinEntregaLlave;
 
       // Si tiene salón pero sin docente asignado, se incluye con valor por defecto
       if (!mapped.docente) mapped.docente = 'No asignado';

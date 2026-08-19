@@ -23,6 +23,7 @@ const BASE_COLUMNS = [
   'hora_inicio', 'hora_fin', 'salon_id', 'aula', 'facultad', 'materia',
   'codigo_materia', 'grupo', 'nivel_grupo', 'estudiantes_prematriculados',
   'estudiantes_matriculados', 'total_estudiantes', 'observaciones',
+  'es_intensivo', 'sin_entrega_llave',
 ];
 
 /** Normaliza un nombre de día (con/sin tildes, cualquier capitalización) al valor canónico del CHECK de `dia`. */

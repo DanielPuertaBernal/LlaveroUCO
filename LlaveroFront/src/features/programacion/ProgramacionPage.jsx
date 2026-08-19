@@ -49,6 +49,14 @@ function formatDia(v) {
   return DIA_LABEL[String(v || '').toLowerCase()] || v;
 }
 
+// Valores de "aula" que son placeholders del Excel de programación, no
+// salones físicos reales — no aportan nada en la vista operativa (entrega
+// de llaves) ni en la columna de acción "Llave".
+const AULAS_PLACEHOLDER = new Set(['NO REQUIERE AULA', 'PENDIENTE']);
+function esAulaPlaceholder(aula) {
+  return AULAS_PLACEHOLDER.has(String(aula || '').trim().toUpperCase());
+}
+
 const COLUMNAS_BASE = [
   { key: 'grupo', label: 'Grupo' },
   { key: 'codigo_materia', label: 'Código' },
@@ -138,7 +146,7 @@ function VistaSemestre({ semestre, onVolver, isAdmin }) {
   // física no aportan nada ahí y solo generan ruido; se conservan en "completa".
   const registrosSinFiltrarPorBloque = vistaCompleta
     ? completa
-    : clasesPorDia.filter((r) => String(r.aula || '').trim().toUpperCase() !== 'NO REQUIERE AULA');
+    : clasesPorDia.filter((r) => !esAulaPlaceholder(r.aula));
   const loading = vistaCompleta ? loadingCompleta : loadingDia;
 
   // Reservas filtradas por día en la vista admin. `r.dia` viene de la BD en
@@ -182,6 +190,11 @@ function VistaSemestre({ semestre, onVolver, isAdmin }) {
   }
 
   const registros = ordenarPorHoraInicio(filtrarPorBloquePorteria(registrosSinFiltrarPorBloque));
+  // Intensivos y clases del Colegio Mauj viven en su propio tab — se
+  // excluyen de "Clases" para no contarlos ni mostrarlos dos veces.
+  const registrosClases = registros.filter((r) => !r.es_intensivo && !r.sin_entrega_llave);
+  const registrosIntensivos = registros.filter((r) => r.es_intensivo);
+  const registrosColegio = registros.filter((r) => r.sin_entrega_llave);
   const reservasFiltradas = ordenarPorHoraInicio(filtrarPorBloquePorteria(reservasSinFiltrarPorBloque));
   const reservasSemestralesDelDia = ordenarPorHoraInicio(filtrarPorBloquePorteria(reservasSemestralesDelDiaSinFiltrar));
 
@@ -467,7 +480,7 @@ function VistaSemestre({ semestre, onVolver, isAdmin }) {
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-border">
-        {['clases', 'reservas-semestrales'].map((tab) => (
+        {['clases', 'intensivos', 'colegio', 'reservas-semestrales'].map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -478,7 +491,13 @@ function VistaSemestre({ semestre, onVolver, isAdmin }) {
                 : 'border-transparent text-muted-foreground hover:text-foreground'
             )}
           >
-            {tab === 'clases' ? `Clases (${registros.length + reservasFiltradas.length})` : `Reservas Semestrales (${reservasFiltradas.length})`}
+            {tab === 'clases'
+              ? `Clases (${registrosClases.length + reservasFiltradas.length})`
+              : tab === 'intensivos'
+                ? `Intensivos (${registrosIntensivos.length})`
+                : tab === 'colegio'
+                  ? `Colegio (${registrosColegio.length})`
+                  : `Reservas Semestrales (${reservasFiltradas.length})`}
           </button>
         ))}
       </div>
@@ -501,7 +520,7 @@ function VistaSemestre({ semestre, onVolver, isAdmin }) {
               key: '_entregar',
               label: 'Llave',
               render: (_v, row) => {
-                if (String(row.aula || '').trim().toUpperCase() === 'NO REQUIERE AULA') return null;
+                if (esAulaPlaceholder(row.aula) || row.sin_entrega_llave) return null;
                 if (yaTieneLlaveHoy(row)) {
                   return <span className="text-xs text-muted-foreground">Ya entregada hoy</span>;
                 }
@@ -513,13 +532,65 @@ function VistaSemestre({ semestre, onVolver, isAdmin }) {
               },
             }]),
           ]}
-          data={(isAdmin ? [...registros, ...reservasFiltradas] : [...registros, ...reservasSemestralesDelDia])
+          data={(isAdmin ? [...registrosClases, ...reservasFiltradas] : [...registrosClases, ...reservasSemestralesDelDia])
             .filter((r) => filtroTipo === 'ALL' || r.tipo === filtroTipo)}
           loading={loading}
           searchable
           extraSearchKeys={['numero_documento']}
           exportable
           exportFileName={`programacion_${semestre.codigo}`}
+          onRowDoubleClick={(row) => setDetailRow(row)}
+        />
+      )}
+
+      {/* Tabla de intensivos (mismas columnas que Clases, hoja "INTENSIVO" del Excel) */}
+      {activeTab === 'intensivos' && (
+        <DataTable
+          columns={[
+            {
+              key: 'tipo',
+              label: 'Tipo',
+              render: (v) => v === 'fantasma'
+                ? <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium dark:bg-purple-900/30 dark:text-purple-300">Fantasma</span>
+                : <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-medium dark:bg-emerald-900/30 dark:text-emerald-300">Intensivo</span>,
+            },
+            ...COLUMNAS_BASE,
+            ...(vistaCompleta ? [] : [{
+              key: '_entregar',
+              label: 'Llave',
+              render: (_v, row) => {
+                if (esAulaPlaceholder(row.aula) || row.sin_entrega_llave) return null;
+                if (yaTieneLlaveHoy(row)) {
+                  return <span className="text-xs text-muted-foreground">Ya entregada hoy</span>;
+                }
+                return (
+                  <Button variant="outline" size="sm" onClick={() => handleEntregarDesdeTabla(row)} disabled={entregarLlave.isPending}>
+                    <Key className="h-3.5 w-3.5 mr-1" />Entregar
+                  </Button>
+                );
+              },
+            }]),
+          ]}
+          data={registrosIntensivos}
+          loading={loading}
+          searchable
+          extraSearchKeys={['numero_documento']}
+          exportable
+          exportFileName={`intensivos_${semestre.codigo}`}
+          onRowDoubleClick={(row) => setDetailRow(row)}
+        />
+      )}
+
+      {/* Tabla de clases del Colegio Mauj — solo indicativa, sin acción de entregar llave */}
+      {activeTab === 'colegio' && (
+        <DataTable
+          columns={COLUMNAS_BASE}
+          data={registrosColegio}
+          loading={loading}
+          searchable
+          extraSearchKeys={['numero_documento']}
+          exportable
+          exportFileName={`colegio_${semestre.codigo}`}
           onRowDoubleClick={(row) => setDetailRow(row)}
         />
       )}
