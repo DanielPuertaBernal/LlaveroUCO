@@ -13,6 +13,15 @@ const { createLogger } = require('../../shared/utils/logger');
 
 const logger = createLogger('Programacion');
 
+// Regla de negocio del horario institucional (ver nota en el dashboard de
+// ocupación): Diurna 7:00-18:00 y Nocturna 18:00-22:00 de lunes a viernes;
+// sábado solo diurna; domingo sin servicio (se excluye del cálculo).
+const DIAS_OCUPACION = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+const DIA_LABEL = {
+  lunes: 'LUNES', martes: 'MARTES', miercoles: 'MIERCOLES',
+  jueves: 'JUEVES', viernes: 'VIERNES', sabado: 'SABADO',
+};
+
 /**
  * Convierte el código raw de semestre del Excel al código normalizado.
  * Formato esperado: PAAAA  donde P=periodo (1 o 2) y AAAA=año (ej: 12026 → 2026-1)
@@ -74,6 +83,103 @@ class ProgramacionService {
 
   async listarSemestreVigente() {
     return semestreRepository.findVigente();
+  }
+
+  /**
+   * Agrega horas/estudiantes ocupados por aula y día a partir de la
+   * programación regular real + reservas semestrales activas (excluye
+   * 'fantasma', que son grupos virtuales sin salón, y las semestrales
+   * canceladas). Reemplaza el cálculo cliente-side del dashboard de
+   * ocupación (que requería subir un Excel manual): la misma data ya vive
+   * en `programaciones`.
+   * @param {string|null} semestre - Código de semestre; si es null usa el vigente
+   * @returns {Promise<{semestre: string|null, totalAulas: number, aulas: object}>}
+   */
+  async obtenerOcupacion(semestre = null) {
+    let semestreCodigo = semestre;
+    if (!semestreCodigo) {
+      const vigente = await semestreRepository.findVigente();
+      semestreCodigo = vigente?.codigo || null;
+    }
+
+    const filas = await programacionRepository.findParaOcupacion(semestreCodigo);
+    const aulas = {};
+
+    const vacioPorDia = () => Object.fromEntries(DIAS_OCUPACION.map((d) => [DIA_LABEL[d], 0]));
+
+    for (const fila of filas) {
+      const dia = String(fila.dia || '').toLowerCase();
+      if (!DIAS_OCUPACION.includes(dia)) continue; // domingo sin servicio, o sin día
+
+      const inicioMin = horaAMinutos(fila.hora_inicio);
+      const finMin = horaAMinutos(fila.hora_fin);
+      if (inicioMin === null || finMin === null || finMin <= inicioMin) continue;
+
+      if (!aulas[fila.aula]) {
+        aulas[fila.aula] = {
+          // Un aula la comparten muchas facultades a lo largo de la semana
+          // (no es un atributo 1:1 del salón) — se acumula cuántas horas usa
+          // cada una, no solo cuáles la usan, para poder mostrar el % de
+          // reparto por facultad en el detalle del aula.
+          horasPorFacultad: {},
+          // Igual que diurna/nocturna pero desglosado por facultad — permite
+          // que el frontend muestre, al filtrar por una facultad, solo las
+          // horas que esa facultad específica ocupa (no el total del aula).
+          porFacultad: {},
+          bloque: fila.bloque || null,
+          diurna: vacioPorDia(),
+          nocturna: vacioPorDia(),
+          est_diurna: vacioPorDia(),
+          est_nocturna: vacioPorDia(),
+        };
+      }
+      const data = aulas[fila.aula];
+      const label = DIA_LABEL[dia];
+
+      if (fila.facultad && !data.porFacultad[fila.facultad]) {
+        data.porFacultad[fila.facultad] = { diurna: vacioPorDia(), nocturna: vacioPorDia() };
+      }
+
+      for (let min = inicioMin; min < finMin; min += 30) {
+        const esNocturna = (min / 60) >= 18 && dia !== 'sabado';
+        if (esNocturna) data.nocturna[label] += 0.5;
+        else data.diurna[label] += 0.5;
+        if (fila.facultad) {
+          data.horasPorFacultad[fila.facultad] = (data.horasPorFacultad[fila.facultad] || 0) + 0.5;
+          const jornada = esNocturna ? 'nocturna' : 'diurna';
+          data.porFacultad[fila.facultad][jornada][label] += 0.5;
+        }
+      }
+
+      const estudiantes = fila.total_estudiantes || 0;
+      if (estudiantes > 0) {
+        const esNocturnaPrimaria = (inicioMin / 60) >= 18 && dia !== 'sabado';
+        if (esNocturnaPrimaria) data.est_nocturna[label] += estudiantes;
+        else data.est_diurna[label] += estudiantes;
+      }
+    }
+
+    for (const data of Object.values(aulas)) {
+      data.facultades = Object.keys(data.horasPorFacultad).sort();
+    }
+
+    return { semestre: semestreCodigo, totalAulas: Object.keys(aulas).length, aulas };
+  }
+
+  /**
+   * Drill-down del informe de ocupación: qué clases concretas ocupan un
+   * aula en un día dado (click en una celda de la matriz).
+   * @param {string} aula @param {string} dia - Cualquier capitalización (ej: "LUNES" o "Lunes")
+   * @param {string|null} semestre
+   * @returns {Promise<object[]>}
+   */
+  async obtenerClasesAulaDia(aula, dia, semestre = null) {
+    let semestreCodigo = semestre;
+    if (!semestreCodigo) {
+      const vigente = await semestreRepository.findVigente();
+      semestreCodigo = vigente?.codigo || null;
+    }
+    return programacionRepository.findDetalleAulaDia(aula, String(dia).toLowerCase(), semestreCodigo);
   }
 
   async eliminarSemestre(codigo) {
@@ -244,6 +350,7 @@ class ProgramacionService {
     const registrosLimpios = limpios.map(({ _fecha_inicio_raw, _fecha_fin_raw, ...rest }) => rest);
 
     const consolidados = this._unificarHorarios(registrosLimpios);
+    this._detectarFantasmas(consolidados);
     logger.info('Importación de programación', {
       filas: rows.length,
       validos: limpios.length,
@@ -389,6 +496,9 @@ class ProgramacionService {
       'total_estudiantes': 'total_estudiantes',
       'semestre': 'semestre',
       'Semestre': 'semestre',
+      'observaciones': 'observaciones',
+      'Observaciones': 'observaciones',
+      'OBSERVACIONES': 'observaciones',
     };
 
     const validos = [];
@@ -410,7 +520,7 @@ class ProgramacionService {
         mapped.numero_documento = documento;
       }
 
-      ['docente', 'dia', 'aula', 'facultad', 'materia', 'horario'].forEach((k) => {
+      ['docente', 'dia', 'aula', 'facultad', 'materia', 'horario', 'observaciones'].forEach((k) => {
         if (mapped[k]) mapped[k] = cleanText(mapped[k]);
       });
 
@@ -567,6 +677,80 @@ class ProgramacionService {
     }
 
     return resultado;
+  }
+
+  /**
+   * Detección automática de grupos fantasma desde la columna OBSERVACIONES
+   * del Excel de programación. La universidad ya anota ahí manualmente
+   * "esta fila es fantasma de tal materia (y tal grupo)" — ej. "ZOD0233" o
+   * "CNB0143 - G1" — con formato código de materia + sufijo de grupo
+   * opcional. Verificado contra datos reales (ver
+   * docs/fantasmas-deteccion-automatica.md): el código referenciado siempre
+   * corresponde a una materia real presente en el mismo archivo.
+   *
+   * Solo se marca `tipo: 'fantasma'` cuando el código resuelve a una
+   * materia real en el mismo lote y, si no trae grupo explícito, esa
+   * materia tiene un único grupo posible (si tiene varios, queda ambiguo —
+   * se deja la fila sin tocar y se registra en el log para revisión
+   * manual, en vez de adivinar a cuál grupo pertenece).
+   *
+   * Muta `consolidados` in-place (agrega `tipo`/`fantasma_de_codigo_materia`
+   * a las filas detectadas) — lo consume `bulkInsert` en el repositorio.
+   * @param {Array<Object>} consolidados
+   * @returns {Array<Object>}
+   */
+  _detectarFantasmas(consolidados) {
+    const RE_OBSERVACION_FANTASMA = /^([A-Z]{2,4}\d{3,4})(?:\s*-\s*G(\d+))?$/i;
+
+    const gruposPorMateria = new Map();
+    for (const r of consolidados) {
+      if (!r.codigo_materia) continue;
+      const key = r.codigo_materia.toUpperCase();
+      if (!gruposPorMateria.has(key)) gruposPorMateria.set(key, new Set());
+      gruposPorMateria.get(key).add(String(r.grupo || ''));
+    }
+
+    let detectados = 0;
+    let ambiguos = 0;
+
+    for (const r of consolidados) {
+      if (!r.observaciones) continue;
+      const m = RE_OBSERVACION_FANTASMA.exec(r.observaciones.trim());
+      if (!m) continue; // texto libre (ej. "MOVILIDAD", "VIRTUAL"), no es referencia a fantasma
+
+      const codigoDestino = m[1].toUpperCase();
+      const grupoIndicado = m[2] || null;
+      const grupos = gruposPorMateria.get(codigoDestino);
+      if (!grupos || grupos.size === 0) continue; // no resuelve a nada real en este archivo
+
+      let grupoDestino = grupoIndicado;
+      if (!grupoDestino) {
+        if (grupos.size === 1) {
+          grupoDestino = [...grupos][0];
+        } else {
+          ambiguos++;
+          logger.warn('Observación de fantasma ambigua (la materia destino tiene varios grupos y la observación no especifica cuál) — se deja sin auto-vincular', {
+            observaciones: r.observaciones,
+            fila: `${r.codigo_materia} grupo ${r.grupo}`,
+            codigoDestino,
+            gruposPosibles: [...grupos],
+          });
+          continue;
+        }
+      }
+
+      // No auto-referenciarse (la fila ya es, ella misma, el destino).
+      if (r.codigo_materia.toUpperCase() === codigoDestino && String(r.grupo || '') === grupoDestino) continue;
+
+      r.tipo = 'fantasma';
+      r.fantasma_de_codigo_materia = codigoDestino;
+      detectados++;
+    }
+
+    if (detectados || ambiguos) {
+      logger.info('Detección automática de fantasmas desde OBSERVACIONES', { detectados, ambiguos });
+    }
+    return consolidados;
   }
 
   /**

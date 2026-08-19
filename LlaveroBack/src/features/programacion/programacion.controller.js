@@ -21,6 +21,21 @@ class ProgramacionController {
     return res.json({ ok: true, data: { semestre: vigente } });
   }
 
+  /** GET /api/programacion/ocupacion?semestre=2026-1 (solo admin) */
+  async ocupacion(req, res) {
+    const semestre = req.query.semestre || null;
+    const resultado = await programacionService.obtenerOcupacion(semestre);
+    return res.json({ ok: true, data: resultado });
+  }
+
+  /** GET /api/programacion/ocupacion/aula/:aula/dia/:dia?semestre=2026-1 (solo admin) */
+  async ocupacionDetalleAulaDia(req, res) {
+    const { aula, dia } = req.params;
+    const semestre = req.query.semestre || null;
+    const clases = await programacionService.obtenerClasesAulaDia(aula, dia, semestre);
+    return res.json({ ok: true, data: { clases } });
+  }
+
   /** DELETE /api/programacion/semestres/:codigo */
   async eliminarSemestre(req, res) {
     const { codigo } = req.params;

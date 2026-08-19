@@ -69,6 +69,55 @@ router.get('/semestres', ...requireAdmin, (req, res) => programacionController.l
  */
 router.get('/semestres/vigente', ...requireAuth, (req, res) => programacionController.listarSemestreVigente(req, res));
 
+/**
+ * @openapi
+ * /programacion/ocupacion:
+ *   get:
+ *     tags: [Programación]
+ *     summary: Ocupación por aula/día calculada desde la programación regular (solo admin)
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: semestre
+ *         schema:
+ *           type: string
+ *         description: Código de semestre (ej. 2026-1); por defecto usa el vigente
+ *     responses:
+ *       200:
+ *         description: Horas y estudiantes ocupados por aula, día y jornada
+ */
+router.get('/ocupacion', ...requireAdmin, (req, res) => programacionController.ocupacion(req, res));
+
+/**
+ * @openapi
+ * /programacion/ocupacion/aula/{aula}/dia/{dia}:
+ *   get:
+ *     tags: [Programación]
+ *     summary: Clases que ocupan un aula en un día concreto (drill-down de una celda de la matriz de ocupación, solo admin)
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: aula
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: dia
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: semestre
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Lista de clases/reservas de esa aula ese día
+ */
+router.get('/ocupacion/aula/:aula/dia/:dia', ...requireAdmin, (req, res) => programacionController.ocupacionDetalleAulaDia(req, res));
+
 router.delete('/semestres/:codigo', ...requireAdmin, (req, res) => programacionController.eliminarSemestre(req, res));
 
 router.patch('/semestres/:codigo/fechas', ...requireAdmin, (req, res) => programacionController.actualizarFechasSemestre(req, res));

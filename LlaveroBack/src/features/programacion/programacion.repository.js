@@ -98,6 +98,83 @@ class ProgramacionRepository {
       .where('c_docente.numero_documento', String(documento));
   }
 
+  /**
+   * Filas que ocupan un aula físicamente para el cálculo de ocupación:
+   * clases regulares ('regular') + reservas semestrales activas
+   * ('semestral', excluye `cancelada=true`). Excluye 'fantasma' (grupos
+   * virtuales sin salón propio, no ocupan nada). Hace join hasta `bloques`
+   * vía `salon_id` para obtener el bloque real del catálogo en vez de
+   * derivarlo por heurística del nombre del aula. `salon_id` puede ser NULL
+   * (aula del Excel sin match en el catálogo `salones`), en cuyo caso
+   * `bloque` viene NULL — se conserva la fila igual, el consumidor decide
+   * cómo agruparla.
+   * @param {string|null} semestreCodigo - Si es null, incluye todos los semestres cargados
+   * @returns {Promise<object[]>}
+   */
+  async findParaOcupacion(semestreCodigo = null) {
+    const q = this.db(`${TABLES.PROGRAMACIONES} as p`)
+      .leftJoin(`${TABLES.PROGRAMACIONES_SEMESTRALES} as ps`, 'ps.programacion_id', 'p.id')
+      .leftJoin(`${TABLES.SALONES} as s`, 's.id', 'p.salon_id')
+      .leftJoin(`${TABLES.BLOQUES} as b`, 'b.id', 's.bloque_id')
+      .leftJoin(`${TABLES.PROGRAMACION_SEMESTRES} as sem`, 'sem.id', 'p.semestre_id')
+      .whereIn('p.tipo', ['regular', 'semestral'])
+      .whereNull('p.deleted_at')
+      .whereNotNull('p.aula')
+      .whereNot('p.aula', '')
+      // Placeholders del Excel de programación, no salones físicos reales —
+      // no deben aparecer como "aula" en el informe de ocupación.
+      .whereNotIn('p.aula', ['NO REQUIERE AULA', 'PENDIENTE'])
+      .andWhere((qb) => qb.whereNull('ps.cancelada').orWhere('ps.cancelada', false))
+      .select(
+        'p.aula', 'p.dia', 'p.hora_inicio', 'p.hora_fin', 'p.facultad', 'p.total_estudiantes', 'p.tipo',
+        'b.nombre_bloque as bloque'
+      );
+    if (semestreCodigo) q.andWhere('sem.codigo', semestreCodigo);
+    return q;
+  }
+
+  /**
+   * Vincula `salon_id` en las filas de `programaciones` cuyo texto de `aula`
+   * coincide con un salón recién creado/renombrado — para que el catálogo de
+   * salones y la programación ya cargada queden sincronizados sin depender
+   * de un backfill manual cada vez que se registra un salón nuevo.
+   * @param {string} nombreSalon @param {string} salonId
+   * @returns {Promise<number>} filas actualizadas
+   */
+  async vincularSalonPorNombre(nombreSalon, salonId) {
+    return this.db(TABLES.PROGRAMACIONES)
+      .where({ aula: nombreSalon })
+      .whereNull('salon_id')
+      .whereNull('deleted_at')
+      .update({ salon_id: salonId });
+  }
+
+  /**
+   * Clases reales (regulares + reservas semestrales activas) que ocupan un
+   * aula en un día concreto — para el drill-down "qué clase está aquí" al
+   * hacer click en una celda de la matriz de ocupación.
+   * @param {string} aula @param {string} dia - Nombre en minúsculas sin tilde (ej: "lunes")
+   * @param {string|null} semestreCodigo
+   * @returns {Promise<object[]>}
+   */
+  async findDetalleAulaDia(aula, dia, semestreCodigo = null) {
+    const q = this.db(`${TABLES.PROGRAMACIONES} as p`)
+      .leftJoin(`${TABLES.PROGRAMACIONES_SEMESTRALES} as ps`, 'ps.programacion_id', 'p.id')
+      .leftJoin(`${TABLES.PROGRAMACION_SEMESTRES} as sem`, 'sem.id', 'p.semestre_id')
+      .whereIn('p.tipo', ['regular', 'semestral'])
+      .whereNull('p.deleted_at')
+      .where('p.aula', aula)
+      .where('p.dia', dia)
+      .andWhere((qb) => qb.whereNull('ps.cancelada').orWhere('ps.cancelada', false))
+      .select(
+        'p.materia', 'p.docente_nombre as docente', 'p.hora_inicio', 'p.hora_fin',
+        'p.horario', 'p.tipo', 'p.facultad', 'p.grupo'
+      )
+      .orderBy('p.hora_inicio');
+    if (semestreCodigo) q.andWhere('sem.codigo', semestreCodigo);
+    return q;
+  }
+
   /** @returns {Promise<string[]>} */
   async distinctAulas() {
     const rows = await this.db(TABLES.PROGRAMACIONES)
@@ -286,14 +363,28 @@ class ProgramacionRepository {
         (r) => !clavesFantasma.has(`${r.codigo_materia}|${r.grupo}`)
       );
 
+      // `r.tipo` puede venir como 'fantasma' (detección automática desde
+      // OBSERVACIONES del Excel, ver `_detectarFantasmas` en el servicio) —
+      // por defecto sigue siendo 'regular' como antes.
       const basePayloads = registrosFiltrados.map((r) => ({
         id: newId(),
-        ...this._pickBase({ ...r, tipo: 'regular', semestre_id: semestreRow ? semestreRow.id : null }),
+        ...this._pickBase({ ...r, tipo: r.tipo === 'fantasma' ? 'fantasma' : 'regular', semestre_id: semestreRow ? semestreRow.id : null }),
       }));
 
       if (basePayloads.length) {
         await trx(TABLES.PROGRAMACIONES).insert(basePayloads);
-        await trx(TABLES.PROGRAMACIONES_REGULARES).insert(basePayloads.map((b) => ({ programacion_id: b.id })));
+
+        const regulares = basePayloads.filter((b) => b.tipo === 'regular').map((b) => ({ programacion_id: b.id }));
+        if (regulares.length) await trx(TABLES.PROGRAMACIONES_REGULARES).insert(regulares);
+
+        const fantasmas = registrosFiltrados
+          .map((r, i) => ({ codigo_materia_origen: r.fantasma_de_codigo_materia, base: basePayloads[i] }))
+          .filter(({ base }) => base.tipo === 'fantasma')
+          .map(({ codigo_materia_origen, base }) => ({
+            programacion_id: base.id,
+            fantasma_de_codigo_materia: codigo_materia_origen || '',
+          }));
+        if (fantasmas.length) await trx(TABLES.PROGRAMACIONES_FANTASMA).insert(fantasmas);
       }
 
       return { insertados: basePayloads.length };
