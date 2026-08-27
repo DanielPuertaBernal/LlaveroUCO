@@ -1,6 +1,6 @@
 'use strict';
 
-require('dotenv').config();
+require('./src/shared/config/env').loadEnv();
 const { buildKnexConfig } = require('./src/shared/db/pg.config');
 
 /** @type {import('knex').Knex.Config} */

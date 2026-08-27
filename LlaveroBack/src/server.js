@@ -1,5 +1,5 @@
 'use strict';
-require('dotenv').config();
+require('./shared/config/env').loadEnv();
 const http = require('http');
 const { createLogger } = require('./shared/utils/logger');
 const log = createLogger('Server');
