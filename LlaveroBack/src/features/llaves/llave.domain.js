@@ -484,9 +484,18 @@ function toClientFormat(registro, limiteHorasDemora = 4) {
     value instanceof Date
       ? value.toLocaleDateString('en-CA', { timeZone: 'America/Bogota' })
       : '';
+  // `hour`/`minute` explícitos: sin ellos `toLocaleTimeString` cae en su
+  // formato por defecto, que incluye segundos ("14:30:07"). El resto de la
+  // app ya los descarta — el parser de `time` en pg.client.js trunca a
+  // "HH:MM" — y el horario académico se maneja en minutos.
   const formatTime = (value) =>
     value instanceof Date
-      ? value.toLocaleTimeString('en-GB', { timeZone: 'America/Bogota', hour12: false })
+      ? value.toLocaleTimeString('en-GB', {
+        timeZone: 'America/Bogota',
+        hour12: false,
+        hour: '2-digit',
+        minute: '2-digit',
+      })
       : '';
 
   // duracion_minutos/tiempo_retraso_minutos/tiempo_retraso_devolucion_minutos
