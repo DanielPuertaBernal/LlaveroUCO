@@ -29,3 +29,11 @@ yarn-debug.log*
 **/.eslintcache
 *.xls
 *.xlsx
+
+# Índice local de CodeGraph y store de pnpm
+.codegraph/
+.pnpm-store/
+.gga
+
+# Volcados de base de datos (contienen datos reales)
+*.sql

@@ -1,0 +1,103 @@
+# Local development stack for LlaveroUCO: Postgres + backend + frontend.
+#
+# Every service reads the single root `.env`. Compose interpolates it here,
+# and the repository is bind-mounted at /repo inside the app containers so
+# `src/shared/config/env.js` and Vite's `envDir` resolve /repo/.env exactly
+# as they do when running on the host.
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: llavero-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${PGDATABASE:-llavero}
+      POSTGRES_USER: ${PGUSER:-llavero}
+      POSTGRES_PASSWORD: ${PGPASSWORD:-llavero_dev_pass}
+      # Deterministic collation so ORDER BY and unique indexes behave the same
+      # on every machine regardless of the host locale.
+      POSTGRES_INITDB_ARGS: "--locale=C --encoding=UTF8"
+    ports:
+      # Host port is 5433 on purpose: this machine already runs a system-wide
+      # Postgres on 5432 and publishing over it would fail to bind.
+      - "${PGPORT:-5433}:5432"
+    volumes:
+      # Postgres 18+ images require the mount at /var/lib/postgresql (not
+      # /var/lib/postgresql/data): data lives in a major-version subdirectory
+      # so pg_upgrade --link works without crossing the mount boundary.
+      - llavero-pgdata:/var/lib/postgresql
+    healthcheck:
+      # A real readiness signal, not just "process started": the backend waits
+      # on this before its first connection attempt.
+      test: ["CMD-SHELL", "pg_isready -U ${PGUSER:-llavero} -d ${PGDATABASE:-llavero}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  migrate:
+    # One-shot schema bootstrap. `depends_on: service_healthy` only proves
+    # Postgres accepts connections, not that the schema exists, so on a fresh
+    # volume the backend would boot against empty tables and crash. This runs
+    # to completion first and the backend gates on its exit code.
+    build:
+      context: ./LlaveroBack
+    image: llaverouco-backend
+    container_name: llavero-migrate
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGHOST: postgres
+      PGPORT: 5432
+    volumes:
+      - .:/repo
+      - /repo/LlaveroBack/node_modules
+    command: ["./node_modules/.bin/knex", "migrate:latest"]
+
+  backend:
+    build:
+      context: ./LlaveroBack
+    container_name: llavero-backend
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      # These two override the root `.env`, which targets the host view of the
+      # database (localhost:5433). Inside the compose network the container
+      # reaches Postgres by service name on its native port. dotenv never
+      # overwrites variables already present in the environment, so the file
+      # stays correct for host-run processes at the same time.
+      PGHOST: postgres
+      PGPORT: 5432
+    ports:
+      - "${PORT:-8080}:8080"
+    volumes:
+      - .:/repo
+      # Anonymous volumes shadow the host node_modules with the ones installed
+      # inside the image: pnpm's symlink layout is not portable across the
+      # bind mount.
+      - /repo/LlaveroBack/node_modules
+
+  frontend:
+    build:
+      context: ./LlaveroFront
+    container_name: llavero-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      # Only the Vite dev-server proxy target. VITE_API_URL is deliberately
+      # NOT overridden here: it is inlined into the client bundle and consumed
+      # by the browser on the host, where the backend is localhost:8080.
+      VITE_PROXY_TARGET: http://backend:8080
+    ports:
+      - "5173:5173"
+    volumes:
+      - .:/repo
+      - /repo/LlaveroFront/node_modules
+
+volumes:
+  llavero-pgdata:
