@@ -36,11 +36,14 @@ class PrestamoRepository {
     return executor(TABLES.PRESTAMOS)
       .leftJoin(`${TABLES.COMUNIDAD} as c_responsable`, 'c_responsable.id', `${TABLES.PRESTAMOS}.docente_responsable_id`)
       .leftJoin(TABLES.UBICACIONES_OPERATIVAS, `${TABLES.UBICACIONES_OPERATIVAS}.id`, `${TABLES.PRESTAMOS}.ubicacion_prestamo_id`)
+      .leftJoin(`${TABLES.USUARIOS} as u_gestion`, 'u_gestion.id', `${TABLES.PRESTAMOS}.gestionado_por_usuario_id`)
       .whereNull(`${TABLES.PRESTAMOS}.deleted_at`)
       .select(
         `${TABLES.PRESTAMOS}.*`,
         'c_responsable.numero_documento as docente_responsable_codigo',
-        `${TABLES.UBICACIONES_OPERATIVAS}.clave as ubicacion_prestamo`
+        `${TABLES.UBICACIONES_OPERATIVAS}.clave as ubicacion_prestamo`,
+        'u_gestion.nombre as gestionado_por_nombre',
+        'u_gestion.rol as gestionado_por_rol'
       );
   }
 
@@ -245,10 +248,13 @@ class DevolucionRepository {
   _headerQuery(executor = this.db) {
     return executor(TABLES.DEVOLUCIONES)
       .leftJoin(TABLES.UBICACIONES_OPERATIVAS, `${TABLES.UBICACIONES_OPERATIVAS}.id`, `${TABLES.DEVOLUCIONES}.ubicacion_devolucion_id`)
+      .leftJoin(`${TABLES.USUARIOS} as u_gestion`, 'u_gestion.id', `${TABLES.DEVOLUCIONES}.gestionado_por_usuario_id`)
       .whereNull(`${TABLES.DEVOLUCIONES}.deleted_at`)
       .select(
         `${TABLES.DEVOLUCIONES}.*`,
-        `${TABLES.UBICACIONES_OPERATIVAS}.clave as ubicacion_devolucion`
+        `${TABLES.UBICACIONES_OPERATIVAS}.clave as ubicacion_devolucion`,
+        'u_gestion.nombre as gestionado_por_nombre',
+        'u_gestion.rol as gestionado_por_rol'
       );
   }
 

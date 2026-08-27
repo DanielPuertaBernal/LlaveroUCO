@@ -9,6 +9,7 @@ import {
   useConfirmarAnticipado,
 } from '@/features/llaves/llavesApi';
 import { useUbicacionesOperativas } from '@/shared/hooks/useUbicacionesOperativas';
+import { getPuntoAtencion, getPuntoAtencionDevolucion } from '@/shared/utils/puntoAtencion';
 import { UBICACIONES } from '@/shared/constants';
 import Swal from '@/shared/lib/swal';
 import { BarChart3, Trash2, Key, CreditCard, Loader2, CheckCircle2, XCircle, Clock } from 'lucide-react';
@@ -85,8 +86,8 @@ export default function HistorialPage() {
             ${campo('H. Préstamo', row.horaEntrega || '—')}
             ${campo('F. Devolución', row.fechaDevolucion || '—')}
             ${campo('H. Devolución', row.horaDevolucion || '—')}
-            ${campo('Ubic. Préstamo', getUbicacionLabel(row.ubicacionPrestamo))}
-            ${campo('Ubic. Devolución', getUbicacionLabel(row.ubicacionDevolucion))}
+            ${campo('Préstamo atendido en', getPuntoAtencion(row, row.ubicacionPrestamo, getUbicacionLabel))}
+            ${campo('Devolución atendida en', getPuntoAtencionDevolucion(row, row.ubicacionDevolucion, getUbicacionLabel))}
             ${campo('Duración', row.duracion || '—')}
             ${campo('Reclamo a tiempo', textoReclamoATiempo(row.seReclamoATiempo))}
             ${campo('Tiempo de demora', row.tiempoRetraso || '—')}
@@ -186,8 +187,8 @@ export default function HistorialPage() {
       'Fecha Devolución': r.fechaDevolucion || '',
       'Hora Devolución': r.horaDevolucion || '',
       'Duración': r.duracion || '',
-      'Ubic. Préstamo': getUbicacionLabel(r.ubicacionPrestamo),
-      'Ubic. Devolución': getUbicacionLabel(r.ubicacionDevolucion),
+      'Préstamo atendido en': getPuntoAtencion(r, r.ubicacionPrestamo, getUbicacionLabel),
+      'Devolución atendida en': getPuntoAtencionDevolucion(r, r.ubicacionDevolucion, getUbicacionLabel),
       'Reclamo a tiempo': reclamaAtLabel(r.seReclamoATiempo),
       'Tiempo de demora': r.tiempoRetraso || '',
       'Tipo Entrega': tipoEntregaLabel(r.tipoEntrega),

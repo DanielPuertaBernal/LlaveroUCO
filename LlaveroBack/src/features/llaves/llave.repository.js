@@ -53,6 +53,7 @@ const PASSTHROUGH_COLUMNS = [
   'nombre_reclama', 'nombre_entrega', 'numero_contacto',
   'estado', 'dia_entrega', 'programacion_id',
   'gestionado_por_usuario_id',
+  'gestionado_por_devolucion_usuario_id',
 ];
 
 class LlaveRepository {
@@ -75,6 +76,12 @@ class LlaveRepository {
    * `llave.workflows.js`), así que la regla de "misma portería devuelve"
    * necesita saber el ROL de quien gestionó, no solo si el campo es NULL,
    * para no aplicar la restricción quien entregó fue admin/aux.
+   *
+   * `gestionado_por_nombre` sale del mismo join y es lo que la UI muestra
+   * como punto de atención: `ubicacion_prestamo`/`ubicacion_devolucion`
+   * quedaron congeladas en la oficina desde 009 (ver `normalizarUbicacion`
+   * en `llave.service.js`), así que el usuario gestor es el único dato
+   * confiable sobre dónde se procesó la operación.
    */
   _readQuery(executor = this.db) {
     return executor(TABLES.REGISTROS_LLAVES)
@@ -82,6 +89,7 @@ class LlaveRepository {
       .leftJoin(`${TABLES.COMUNIDAD} as c_reclama`, 'c_reclama.id', `${TABLES.REGISTROS_LLAVES}.reclama_comunidad_id`)
       .leftJoin(`${TABLES.COMUNIDAD} as c_entrega`, 'c_entrega.id', `${TABLES.REGISTROS_LLAVES}.entrega_comunidad_id`)
       .leftJoin(`${TABLES.USUARIOS} as u_gestion`, 'u_gestion.id', `${TABLES.REGISTROS_LLAVES}.gestionado_por_usuario_id`)
+      .leftJoin(`${TABLES.USUARIOS} as u_gestion_dev`, 'u_gestion_dev.id', `${TABLES.REGISTROS_LLAVES}.gestionado_por_devolucion_usuario_id`)
       .leftJoin(`${TABLES.UBICACIONES_OPERATIVAS} as uo_prestamo`, 'uo_prestamo.id', `${TABLES.REGISTROS_LLAVES}.ubicacion_prestamo_id`)
       .leftJoin(`${TABLES.UBICACIONES_OPERATIVAS} as uo_devolucion`, 'uo_devolucion.id', `${TABLES.REGISTROS_LLAVES}.ubicacion_devolucion_id`)
       .whereNull(`${TABLES.REGISTROS_LLAVES}.deleted_at`)
@@ -91,6 +99,9 @@ class LlaveRepository {
         'c_reclama.numero_documento as numero_documento_reclama',
         'c_entrega.numero_documento as numero_documento_entrega',
         'u_gestion.rol as gestionado_por_rol',
+        'u_gestion.nombre as gestionado_por_nombre',
+        'u_gestion_dev.rol as gestionado_por_devolucion_rol',
+        'u_gestion_dev.nombre as gestionado_por_devolucion_nombre',
         'uo_prestamo.clave as ubicacion_prestamo',
         'uo_devolucion.clave as ubicacion_devolucion'
       );

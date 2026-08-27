@@ -457,7 +457,9 @@ function construirDatosDevolucion({
       quien_entrega: entregaInfo.quien || 'docente',
       numero_documento_entrega: entregaInfo.documento || registro?.numero_documento,
       nombre_entrega: entregaInfo.nombre || registro?.docente,
-      gestionado_por_usuario_id: gestionadoPorUsuarioId,
+      // Columna propia: sobrescribir `gestionado_por_usuario_id` acá borraba
+      // al gestor del préstamo (ver 022_registros_llaves_gestor_devolucion).
+      gestionado_por_devolucion_usuario_id: gestionadoPorUsuarioId,
     },
   };
 }
@@ -512,6 +514,10 @@ function toClientFormat(registro, limiteHorasDemora = 4) {
     tiempoRetrasoDevolucion: formatMin(registro?.tiempo_retraso_devolucion_minutos),
     ubicacionPrestamo: registro?.ubicacion_prestamo || '',
     ubicacionDevolucion: registro?.ubicacion_devolucion || '',
+    gestionadoPorNombre: registro?.gestionado_por_nombre || '',
+    gestionadoPorRol: registro?.gestionado_por_rol || '',
+    gestionadoPorDevolucionNombre: registro?.gestionado_por_devolucion_nombre || '',
+    gestionadoPorDevolucionRol: registro?.gestionado_por_devolucion_rol || '',
     quienReclama: registro?.quien_reclama || '',
     documentoReclama: registro?.numero_documento_reclama || '',
     nombreReclama: registro?.nombre_reclama || '',
