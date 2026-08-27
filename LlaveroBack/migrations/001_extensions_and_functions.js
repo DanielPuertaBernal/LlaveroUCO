@@ -53,9 +53,16 @@ exports.up = async function up(knex) {
 
   // Índice funcional inmutable para búsquedas insensibles a tildes
   // (usado por 002_catalogos.js sobre comunidad.nombre).
+  //
+  // El cuerpo va calificado por esquema (`public.unaccent`) y con cast
+  // explícito a `regdictionary` a propósito: al usar esta función dentro de
+  // una expresión de índice, Postgres reescribe (inline) el cuerpo con un
+  // search_path restringido, y un `unaccent` sin calificar falla ahí con
+  // "function unaccent(unknown, text) does not exist during inlining" aunque
+  // la llamada directa funcione.
   await knex.raw(`
     CREATE OR REPLACE FUNCTION immutable_unaccent(text) RETURNS text AS $$
-      SELECT unaccent('unaccent', $1)
+      SELECT public.unaccent('public.unaccent'::regdictionary, $1)
     $$ LANGUAGE sql IMMUTABLE PARALLEL SAFE STRICT;
   `);
 };
