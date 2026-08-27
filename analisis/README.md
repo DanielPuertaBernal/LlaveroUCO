@@ -7,6 +7,7 @@ Auditoría y trazado de flujos/dependencias del sistema. Nota: este documento de
 - [Frontend — índice de features](./frontend/README.md)
 - [Firmware Lectores](./lectores/firmware.md) — histórico, el firmware ESP32 fue retirado del proyecto
 - [Deuda técnica e inconsistencias](./deuda-tecnica.md) — consolidado de riesgos y hallazgos de la auditoría
+- [Testing y TDD](./testing-tdd.md) — análisis de adopción de tests automatizados (Vitest/supertest/RTL) y secuencia recomendada
 - [Estrategia de migración de stack](./estrategia-migracion/README.md) — plan original de migración a PostgreSQL (ya ejecutado)
 
 Cada módulo/feature tiene su propio archivo con: propósito, modelo de datos, diagramas de dependencias y flujos (Mermaid), puntos de inflexión (lógica de negocio no obvia) y observaciones de auditoría.
