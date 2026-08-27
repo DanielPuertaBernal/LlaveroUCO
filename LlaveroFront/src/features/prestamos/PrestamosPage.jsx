@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import DataTable from '@/shared/components/DataTable';
 import { usePrestamosAbiertos, usePrestamosHistorial, useCrearPrestamo, useRegistrarDevolucion } from './prestamosApi';
 import PrestamosDetallePanel from './PrestamosDetallePanel';
+import PrestamosPersonaModal from './PrestamosPersonaModal';
 import { equiposApi } from '@/features/equipos/equiposApi';
 import { comunidadApi } from '@/features/comunidad/comunidadApi';
 import { useUbicacionesOperativas } from '@/shared/hooks/useUbicacionesOperativas';
@@ -59,6 +60,10 @@ export default function PrestamosPage() {
   const [barcodePrestamo, setBarcodePrestamo] = useState('');
   const [barcodeDevolucion, setBarcodeDevolucion] = useState('');
   const [prestamoSeleccionadoId, setPrestamoSeleccionadoId] = useState('');
+  const [personaDevolucion, setPersonaDevolucion] = useState(null);
+  const [buscarPersonaInput, setBuscarPersonaInput] = useState('');
+  const [buscandoPersonaDevolucion, setBuscandoPersonaDevolucion] = useState(false);
+  const inputPersonaRef = useRef(null);
   // Estado unificado del solicitante y docente responsable
   const SOL_FORM_INIT = { solicitante_codigo: '', solicitante_nombre: '', solicitante_tipo: '', responsable_codigo: '', responsable_nombre: '' };
   const [solForm, setSolForm] = useState(SOL_FORM_INIT);
@@ -210,6 +215,74 @@ export default function PrestamosPage() {
     } finally {
       setBuscandoPersona(false);
     }
+  }
+
+  /**
+   * Open loans belonging to the identified person. `docente_codigo_nfc` stores
+   * the solicitante's document number (see `crear` below), and the card scan
+   * resolves to that same person through `comunidad`, so the document is the
+   * join key — never the raw scanned code, which may be the carnet id.
+   */
+  const prestamosDePersona = useMemo(() => {
+    if (!personaDevolucion) return [];
+    const documento = String(personaDevolucion.numero_documento || '').trim();
+    if (!documento) return [];
+    return prestamos.filter(
+      (p) =>
+        String(p.docente_codigo_nfc || '').trim() === documento &&
+        (p.equipos || []).some((e) => e.estado_equipo === 'entregado')
+    );
+  }, [prestamos, personaDevolucion]);
+
+  /**
+   * Accepts a scanned card, a document number or a name. Digits are tried as
+   * document first and carnet second (and the other way around for anything
+   * else), mirroring `buscarPersona`; a name with no numeric match falls back
+   * to the shared by-name picker.
+   */
+  async function buscarPersonaParaDevolucion(valorEntrada = buscarPersonaInput) {
+    const valor = String(valorEntrada || '').trim();
+    if (!valor) return;
+
+    setBuscandoPersonaDevolucion(true);
+    try {
+      let persona = null;
+      const esNumerico = /^\d+$/.test(valor);
+      const intentos = esNumerico
+        ? [comunidadApi.buscarPorDocumento, comunidadApi.buscarPorCarnet]
+        : [comunidadApi.buscarPorCarnet, comunidadApi.buscarPorDocumento];
+
+      for (const intento of intentos) {
+        try {
+          const res = await intento(valor);
+          persona = res.data.data.persona;
+          break;
+        } catch { /* siguiente estrategia */ }
+      }
+
+      if (!persona && /[a-zA-Z]/.test(valor)) {
+        persona = await abrirBuscadorPersonaPorNombre({
+          titulo: 'Buscar persona por nombre',
+          placeholder: 'Nombre de la persona',
+        });
+      }
+
+      if (!persona) {
+        return showWarning(`No se encontró persona con "${valor}"`);
+      }
+
+      setPersonaDevolucion(persona);
+      setBuscarPersonaInput('');
+    } finally {
+      setBuscandoPersonaDevolucion(false);
+    }
+  }
+
+  function gestionarDevolucionDePrestamo(prestamo) {
+    setPrestamoSeleccionadoId(String(prestamo.id));
+    setBarcodeDevolucion('');
+    setPersonaDevolucion(null);
+    setTimeout(() => inputDevolucionRef.current?.focus(), 0);
   }
 
   function equipoPrestadoEnAbiertos(equipoId) {
@@ -511,6 +584,46 @@ export default function PrestamosPage() {
           </Button>
         )}
       </div>
+
+      {/* Identificación de la persona que viene a devolver */}
+      <div className="bg-card border border-border rounded-lg p-4 space-y-2">
+        <p className="text-sm font-medium text-foreground">¿Quién viene a devolver?</p>
+        <div className="flex gap-2">
+          <Input
+            ref={inputPersonaRef}
+            autoFocus
+            value={buscarPersonaInput}
+            onChange={(e) => setBuscarPersonaInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key !== 'Enter') return;
+              e.preventDefault();
+              void buscarPersonaParaDevolucion();
+            }}
+            placeholder="Pase el carnet, o escriba la cédula o el nombre y presione Enter"
+            maxLength={LONGITUD_MAXIMA?.NOMBRE ?? 120}
+          />
+          <Button
+            onClick={() => buscarPersonaParaDevolucion()}
+            disabled={buscandoPersonaDevolucion || !buscarPersonaInput.trim()}
+          >
+            {buscandoPersonaDevolucion
+              ? <Loader2 className="h-4 w-4 animate-spin" />
+              : <Search className="h-4 w-4" />}
+          </Button>
+        </div>
+      </div>
+
+      {personaDevolucion && (
+        <PrestamosPersonaModal
+          persona={personaDevolucion}
+          prestamos={prestamosDePersona}
+          onClose={() => {
+            setPersonaDevolucion(null);
+            setTimeout(() => inputPersonaRef.current?.focus(), 0);
+          }}
+          onGestionarDevolucion={gestionarDevolucionDePrestamo}
+        />
+      )}
 
       {!esPorteria && (
         <Sheet open={showForm} onOpenChange={(open) => !open && setShowForm(false)}>
