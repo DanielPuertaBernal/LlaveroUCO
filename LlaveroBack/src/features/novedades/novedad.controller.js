@@ -17,10 +17,10 @@ class NovedadController {
   }
 
   async listar(req, res) {
-    const { tipo_recurso, estado, categoria, busqueda, desde, hasta, page, limit } = req.query;
+    const { tipo_recurso, estado, categoria, elemento_afectado, busqueda, desde, hasta, page, limit } = req.query;
     const pagination = parsePagination({ page, limit });
     const result = await novedadService.listar(
-      { tipo_recurso, estado, categoria, busqueda, desde, hasta },
+      { tipo_recurso, estado, categoria, elemento_afectado, busqueda, desde, hasta },
       pagination
     );
     if (pagination) {

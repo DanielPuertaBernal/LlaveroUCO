@@ -5,6 +5,7 @@ const { newId } = require('../../shared/db/id');
 const { applyPagination } = require('../../shared/utils/pagination.helper');
 const comunidadRepository = require('../comunidad/comunidad.repository');
 const salonRepository = require('../salones/salon.repository');
+const elementoAfectadoService = require('../elementos-afectados/elementoAfectado.service');
 
 /**
  * Repositorio de `novedades` (Fase S6 de la migración Mongo → Postgres).
@@ -38,9 +39,12 @@ class NovedadRepository {
     return this.db(TABLES.NOVEDADES)
       .leftJoin(`${TABLES.COMUNIDAD} as c_rep`, 'c_rep.id', `${TABLES.NOVEDADES}.reportado_por_comunidad_id`)
       .leftJoin(`${TABLES.SALONES} as s`, 's.id', `${TABLES.NOVEDADES}.salon_id`)
+      .leftJoin(`${TABLES.ELEMENTOS_AFECTADOS} as ea`, 'ea.id', `${TABLES.NOVEDADES}.elemento_afectado_id`)
       .whereNull(`${TABLES.NOVEDADES}.deleted_at`)
       .select(
         `${TABLES.NOVEDADES}.*`,
+        'ea.clave as elemento_afectado_clave',
+        'ea.nombre as elemento_afectado_nombre',
         this.db.raw(`
           CASE
             WHEN ${TABLES.NOVEDADES}.llave_id IS NOT NULL THEN 'llave'
@@ -84,6 +88,18 @@ class NovedadRepository {
       payload.salon = data.salon;
       const salon = data.salon ? await salonRepository.findByNombre(data.salon) : null;
       payload.salon_id = salon ? salon.id : null;
+    }
+
+    // El API acepta id o clave del catálogo (`elementoAfectadoService.resolverId`)
+    // para que el front no tenga que hacer un lookup previo.
+    if (data.elemento_afectado !== undefined || data.elemento_afectado_id !== undefined) {
+      const ref = data.elemento_afectado_id ?? data.elemento_afectado;
+      payload.elemento_afectado_id = await elementoAfectadoService.resolverId(ref);
+    }
+
+    if (data.cantidad_afectada !== undefined) {
+      const cantidad = Number.parseInt(data.cantidad_afectada, 10);
+      payload.cantidad_afectada = Number.isFinite(cantidad) && cantidad > 0 ? cantidad : 1;
     }
 
     return payload;
@@ -136,6 +152,9 @@ class NovedadRepository {
     }
     if (filters.estado) query.andWhere(`${TABLES.NOVEDADES}.estado`, filters.estado);
     if (filters.categoria) query.andWhere(`${TABLES.NOVEDADES}.categoria`, filters.categoria);
+    // Se filtra por clave y no por id: la clave es estable y legible en la
+    // URL, el id es un uuid que el front tendría que resolver primero.
+    if (filters.elemento_afectado) query.andWhere('ea.clave', filters.elemento_afectado);
     if (filters.reportado_por) query.andWhere(`${TABLES.NOVEDADES}.reportado_por`, filters.reportado_por);
     if (filters.busqueda) {
       const b = `%${filters.busqueda}%`;
@@ -144,6 +163,7 @@ class NovedadRepository {
           .orWhereILike(`${TABLES.NOVEDADES}.reportado_por_nombre`, b)
           .orWhereILike(`${TABLES.NOVEDADES}.salon`, b)
           .orWhereILike(`${TABLES.NOVEDADES}.descripcion`, b)
+          .orWhereILike('ea.nombre', b)
       );
     }
     if (filters.desde) query.andWhere(`${TABLES.NOVEDADES}.fecha_reporte`, '>=', new Date(`${filters.desde}T00:00:00`));
@@ -170,11 +190,28 @@ class NovedadRepository {
       .count({ total: '*' })
       .groupByRaw(tipoRecursoCase);
 
+    // El punto del catálogo: cuántas sillas/ventanas rotas hay, no cuántos
+    // "daños físicos". Se suma `cantidad_afectada` en vez de contar filas —
+    // un reporte de "3 sillas rotas" es una novedad pero tres sillas.
+    const porElementoRows = await this.db(`${TABLES.NOVEDADES} as n`)
+      .innerJoin(`${TABLES.ELEMENTOS_AFECTADOS} as ea`, 'ea.id', 'n.elemento_afectado_id')
+      .whereNull('n.deleted_at')
+      .groupBy('ea.clave', 'ea.nombre')
+      .select('ea.clave', 'ea.nombre')
+      .count({ reportes: '*' })
+      .sum({ unidades: 'n.cantidad_afectada' });
+
     const mapReduce = (arr, key) => arr.reduce((acc, r) => ({ ...acc, [r[key]]: Number(r.total) }), {});
     return {
       por_estado: mapReduce(porEstado, 'estado'),
       por_categoria: mapReduce(porCategoria, 'categoria'),
       por_tipo: mapReduce(porTipoRows, 'tipo_recurso'),
+      por_elemento: porElementoRows.map((r) => ({
+        clave: r.clave,
+        nombre: r.nombre,
+        reportes: Number(r.reportes),
+        unidades: Number(r.unidades),
+      })),
       total: porEstado.reduce((s, r) => s + Number(r.total), 0),
     };
   }

@@ -15,6 +15,10 @@ const registrarNovedadSchema = z.object({
   reportado_por_nombre: z.string().optional().default(''),
   salon: z.string().optional().default(''),
   categoria: z.enum(['sin_novedad', 'daño_fisico', 'no_funciona', 'perdida', 'otro', 'demora_entrega']),
+  // Clave o id del catálogo `elementos_afectados`. Opcional: las novedades
+  // de `demora_entrega` o `perdida` no afectan a un elemento del aula.
+  elemento_afectado: z.string().trim().optional().default(''),
+  cantidad_afectada: z.coerce.number().int().min(1).max(999).optional().default(1),
   descripcion: z.string().trim().min(1, 'La descripción es requerida').max(500),
 });
 
