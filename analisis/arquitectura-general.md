@@ -10,7 +10,7 @@ Sistema de gestión de salones, llaves y equipos de la UCO con identificación p
 | `AulaSyncBackend` | `develop` | Node/Express + MongoDB + Socket.io | API REST, lógica de negocio, WebSocket |
 | `AulaSyncFrontend` | `develop` | React + Vite | Panel de administración y operación |
 
-Documentación detallada por módulo: [`backend/README.md`](./backend/README.md) · [`frontend/README.md`](./frontend/README.md) · [`lectores/firmware.md`](./lectores/firmware.md)
+Documentación detallada por módulo: [`backend/README.md`](./backend/README.md) · [`frontend/README.md`](./frontend/README.md)
 
 ## Diagrama de componentes
 
@@ -70,4 +70,3 @@ Cron cada 5 minutos en el backend (`notificacion.scheduler.js`): sincroniza rese
 
 ## Notas de estado del repositorio
 
-- `AulaSyncLectores` no tiene rama `develop`; el firmware documentado corresponde a `main`. Si se crea `develop` en ese repo, revisar si el contrato HTTP (`SERVER_URL`, payload) cambió.

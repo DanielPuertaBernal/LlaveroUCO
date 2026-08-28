@@ -41,4 +41,4 @@ Nota de diseño (no es deuda per se): access token solo en memoria (Zustand), re
 
 ## Pendiente
 
-Este documento cubre lo capturado en la auditoría del backend y frontend. Falta pasar por el mismo tamiz **AulaSyncLectores** (firmware ESP32+RC522) — no se registraron riesgos específicos de ese repo en la auditoría inicial.
+Este documento cubre backend y frontend, los dos repos que quedan en el proyecto. El firmware ESP32+RC522 fue retirado junto con el gateway NFC; los lectores actuales son RFID USB tipo teclado emulado y no tienen código propio que auditar.

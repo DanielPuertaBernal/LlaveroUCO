@@ -19,7 +19,3 @@ Dos migraciones grandes ya ejecutadas explican por qué hay código con nombres 
 - **MongoDB → PostgreSQL**. Los modelos Mongoose (`*.schema.js`) fueron reemplazados por repositorios sobre Knex. Varias columnas conservan el nombre del campo Mongo original para no romper el contrato HTTP, y algunos repositorios traducen entre el payload de negocio y las columnas reales (`novedad.repository.js`, `llave.repository.js`).
 - **ESP32/NFC → lectores RFID USB**. El gateway serie sobre Socket.IO fue retirado; cada operador lee su propia tarjeta en el navegador. La migración 009 acompañó ese cambio moviendo la autorización de portería de `ubicaciones_operativas` a permisos por bloque (`portero_bloques`).
 
-El material de la auditoría original y el plan de migración se conservan en:
-
-- [Estrategia de migración de stack](./estrategia-migracion/README.md) — histórico, ya ejecutado
-- [Firmware Lectores](./lectores/firmware.md) — histórico, el firmware ESP32 fue retirado
