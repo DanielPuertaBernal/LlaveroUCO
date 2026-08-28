@@ -6,6 +6,33 @@
 const DIAS_ES = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 
 /**
+ * Toda la operación de LlaveroUCO ocurre en hora de Bogotá (UTC-5, sin DST),
+ * pero el proceso no corre necesariamente ahí: el contenedor de despliegue
+ * arranca en UTC. Leer `getHours()`/`getDay()` del `Date` toma el reloj LOCAL
+ * del proceso y desplaza el horario académico cinco horas — un reclamo de las
+ * 07:20 se leía como las 12:20 y fabricaba 320 minutos de retraso. Las dos
+ * funciones de abajo son el único punto donde un instante se traduce a
+ * "fecha/hora del día" para el negocio.
+ */
+const TZ_BOGOTA = 'America/Bogota';
+
+/** Fecha calendario ("YYYY-MM-DD") del instante, en Bogotá. */
+function fechaEnBogota(fecha = new Date()) {
+  return fecha.toLocaleDateString('en-CA', { timeZone: TZ_BOGOTA });
+}
+
+/** Minutos transcurridos desde la medianoche de Bogotá para ese instante. */
+function minutosDelDiaEnBogota(fecha = new Date()) {
+  const hhmm = fecha.toLocaleTimeString('en-GB', {
+    timeZone: TZ_BOGOTA,
+    hour12: false,
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  return horaAMinutos(hhmm);
+}
+
+/**
  * Formatea una cantidad de minutos en texto legible (min / h min / d h min)
  * @param {number} minutos
  * @returns {string} Ej: "45min", "2h 15min", "3d 8h 33min"
@@ -23,22 +50,25 @@ function formatMinutos(minutos) {
 }
 
 /**
- * Retorna el nombre del día actual en español
+ * Retorna el nombre del día actual en español, según el calendario de Bogotá.
  * @returns {string} Ej: "Lunes"
  */
 function getDiaActual() {
-  return DIAS_ES[new Date().getDay()];
+  // El mediodía UTC de esa fecha cae en el mismo día calendario en cualquier
+  // zona, así que `getUTCDay()` sobre él da el día de la semana sin volver a
+  // depender del reloj local.
+  return DIAS_ES[new Date(`${fechaEnBogota()}T12:00:00Z`).getUTCDay()];
 }
 
 /**
- * Retorna la fecha actual en formato YYYY-MM-DD, en hora LOCAL del servidor.
- * `toISOString()` da la fecha en UTC — en Colombia (UTC-5) eso ya muestra el
- * día siguiente entre las 7pm y medianoche, desalineando esta fecha con
- * `getDiaActual()` (que sí usa hora local) y con cualquier filtro de "hoy".
+ * Retorna la fecha actual en formato YYYY-MM-DD, en hora de Bogotá.
+ * `toISOString()` da la fecha en UTC — eso ya muestra el día siguiente entre
+ * las 7pm y medianoche de Bogotá, desalineando esta fecha con `getDiaActual()`
+ * y con cualquier filtro de "hoy".
  * @returns {string}
  */
 function getFechaHoy() {
-  return new Date().toLocaleDateString('en-CA');
+  return fechaEnBogota();
 }
 
 /**
@@ -157,7 +187,7 @@ function esReclamoAnticipado(horario, ahora = new Date()) {
     if (partes.length < 1) return false;
     const horaInicio = horaAMinutos(partes[0].trim());
     if (horaInicio === null) return false;
-    const minutosAhora = ahora.getHours() * 60 + ahora.getMinutes();
+    const minutosAhora = minutosDelDiaEnBogota(ahora);
     return minutosAhora < horaInicio - 30;
   } catch {
     return false;
@@ -177,7 +207,7 @@ function calcularDuracionClase(horario, fechaDevolucion = new Date()) {
     if (partes.length < 1) return '';
     const horaInicio = horaAMinutos(partes[0].trim());
     if (horaInicio === null) return '';
-    const minutosDevolucion = fechaDevolucion.getHours() * 60 + fechaDevolucion.getMinutes();
+    const minutosDevolucion = minutosDelDiaEnBogota(fechaDevolucion);
     const diffMin = minutosDevolucion - horaInicio;
     if (diffMin <= 0) return '0min';
     return formatMinutos(diffMin);
@@ -199,7 +229,7 @@ function calcularTiempoRetraso(horario, ahora = new Date()) {
     if (partes.length < 1) return '';
     const horaInicio = horaAMinutos(partes[0].trim());
     if (horaInicio === null) return '';
-    const minutosAhora = ahora.getHours() * 60 + ahora.getMinutes();
+    const minutosAhora = minutosDelDiaEnBogota(ahora);
     const diff = minutosAhora - horaInicio;
     if (diff <= 0) return '';
     return formatMinutos(diff);
@@ -268,7 +298,7 @@ function calcularTiempoRetrasoMinutos(horario, ahora = new Date()) {
     if (partes.length < 1) return null;
     const horaInicio = horaAMinutos(partes[0].trim());
     if (horaInicio === null) return null;
-    const minutosAhora = ahora.getHours() * 60 + ahora.getMinutes();
+    const minutosAhora = minutosDelDiaEnBogota(ahora);
     const diff = minutosAhora - horaInicio;
     return diff > 0 ? diff : null;
   } catch {
@@ -277,6 +307,9 @@ function calcularTiempoRetrasoMinutos(horario, ahora = new Date()) {
 }
 
 module.exports = {
+  TZ_BOGOTA,
+  fechaEnBogota,
+  minutosDelDiaEnBogota,
   getDiaActual,
   getFechaHoy,
   horaAMinutos,

@@ -9,6 +9,7 @@ const {
 const {
   calcularTiempoRetrasoMinutos,
   esReclamoAnticipado,
+  minutosDelDiaEnBogota,
 } = require('../../shared/utils/date.helper');
 const {
   normalizarDocumento,
@@ -161,7 +162,7 @@ function createLlaveWorkflows({
     }
 
     const ahora = new Date();
-    const minutosAhora = ahora.getHours() * 60 + ahora.getMinutes();
+    const minutosAhora = minutosDelDiaEnBogota(ahora);
     const claseTarget = encontrarClaseActual(contexto.clasesDisponibles, minutosAhora);
     const reservaPendiente = await findReservaPendienteNFCByDocumento(documento, ahora);
 
