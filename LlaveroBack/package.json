@@ -7,6 +7,8 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "db:migrate": "knex migrate:latest",
     "db:rollback": "knex migrate:rollback"
   },
@@ -33,6 +35,8 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "nodemon": "^3.1.4"
+    "nodemon": "^3.1.4",
+    "supertest": "^7.2.2",
+    "vitest": "^4.1.11"
   }
 }
