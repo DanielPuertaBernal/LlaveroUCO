@@ -294,14 +294,46 @@ export default function OcupacionPage() {
     [docentesFiltrados, paginaDocentesSegura]
   );
 
+  /**
+   * Two different questions, and mixing them up is the easy mistake here.
+   *
+   * `tasa` is how full each shift is against ITS OWN capacity — 66h/week for
+   * diurna, 20h for nocturna. These are the real utilization rates and they do
+   * NOT add up to the global figure.
+   *
+   * `aporte` is how many points of the global percentage each shift accounts
+   * for, both measured against the same 86h denominator. These DO add up to
+   * the global. A shift can be nearly full and still contribute few points,
+   * simply because it spans fewer hours.
+   */
   const kpiGlobal = useMemo(() => {
-    if (!aulasFiltradas.length) return 0;
-    let sum = 0;
+    const vacio = { global: 0, tasaDiurna: 0, tasaNocturna: 0, aporteDiurna: 0, aporteNocturna: 0, horasDiurna: 0, horasNocturna: 0 };
+    if (!aulasFiltradas.length) return vacio;
+
+    let sumDiurna = 0;
+    let sumNocturna = 0;
     aulasFiltradas.forEach(([, a]) => {
-      DIAS.forEach((d) => { sum += horasDiurna(a, d) + horasNocturna(a, d); });
+      DIAS.forEach((d) => {
+        sumDiurna += horasDiurna(a, d);
+        sumNocturna += horasNocturna(a, d);
+      });
     });
-    const max = aulasFiltradas.length * TOTAL_WEEKLY_HOURS;
-    return max > 0 ? (sum / max) * 100 : 0;
+
+    const nAulas = aulasFiltradas.length;
+    const maxTotal = nAulas * TOTAL_WEEKLY_HOURS;
+    const maxDiurna = nAulas * WEEKLY_DIURNA;
+    const maxNocturna = nAulas * WEEKLY_NOCTURNA;
+    if (maxTotal <= 0) return vacio;
+
+    return {
+      global: ((sumDiurna + sumNocturna) / maxTotal) * 100,
+      tasaDiurna: maxDiurna > 0 ? (sumDiurna / maxDiurna) * 100 : 0,
+      tasaNocturna: maxNocturna > 0 ? (sumNocturna / maxNocturna) * 100 : 0,
+      aporteDiurna: (sumDiurna / maxTotal) * 100,
+      aporteNocturna: (sumNocturna / maxTotal) * 100,
+      horasDiurna: sumDiurna,
+      horasNocturna: sumNocturna,
+    };
   }, [aulasFiltradas, facultad]);
 
   // Rankings para el panel de gráficos: top aulas más ocupadas, ocupación
@@ -392,6 +424,21 @@ export default function OcupacionPage() {
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), 'Ocupacion');
 
+      // Hoja "Por Jornada": el mismo desglose de los KPI. "% ocupación" mide
+      // cada jornada contra su propia capacidad; "% del global" reparte los
+      // puntos del total y por eso sí suma la ocupación global.
+      const filasJornada = [
+        ['JORNADA', 'HORAS OCUPADAS', 'HORAS POSIBLES', '% OCUPACIÓN', '% DEL GLOBAL'],
+        ['Diurna 7:00-18:00', kpiGlobal.horasDiurna, aulasFiltradas.length * WEEKLY_DIURNA,
+          Number(kpiGlobal.tasaDiurna.toFixed(2)), Number(kpiGlobal.aporteDiurna.toFixed(2))],
+        ['Nocturna 18:00-22:00', kpiGlobal.horasNocturna, aulasFiltradas.length * WEEKLY_NOCTURNA,
+          Number(kpiGlobal.tasaNocturna.toFixed(2)), Number(kpiGlobal.aporteNocturna.toFixed(2))],
+        ['Global', kpiGlobal.horasDiurna + kpiGlobal.horasNocturna,
+          aulasFiltradas.length * TOTAL_WEEKLY_HOURS,
+          Number(kpiGlobal.global.toFixed(2)), Number(kpiGlobal.global.toFixed(2))],
+      ];
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(filasJornada), 'Por Jornada');
+
       // Hoja "Por Facultad": lista completa (no solo el top 8 del panel).
       const filasFacultad = [['FACULTAD', 'HORAS', '% DEL TOTAL FILTRADO']];
       resumen.porFacultad.forEach((r) => filasFacultad.push([r.nombre, r.horas, Number(r.pct.toFixed(2))]));
@@ -460,7 +507,34 @@ export default function OcupacionPage() {
             </div>
             <div>
               <h3 className="text-xs text-muted-foreground uppercase tracking-wide">Ocupación Global</h3>
-              <p className="text-2xl font-bold text-foreground">{fmtPct(kpiGlobal)}</p>
+              <p className="text-2xl font-bold text-foreground">{fmtPct(kpiGlobal.global)}</p>
+              <p className="text-[11px] text-muted-foreground">
+                {fmtPct(kpiGlobal.aporteDiurna)} diurna + {fmtPct(kpiGlobal.aporteNocturna)} nocturna
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
+              <Sun className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+            </div>
+            <div>
+              <h3 className="text-xs text-muted-foreground uppercase tracking-wide">Diurna 7:00-18:00</h3>
+              <p className="text-2xl font-bold text-foreground">{fmtPct(kpiGlobal.tasaDiurna)}</p>
+              <p className="text-[11px] text-muted-foreground">
+                {fmtH(kpiGlobal.horasDiurna)}h sobre {WEEKLY_DIURNA}h/aula
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg bg-indigo-500/10 flex items-center justify-center shrink-0">
+              <Moon className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+            </div>
+            <div>
+              <h3 className="text-xs text-muted-foreground uppercase tracking-wide">Nocturna 18:00-22:00</h3>
+              <p className="text-2xl font-bold text-foreground">{fmtPct(kpiGlobal.tasaNocturna)}</p>
+              <p className="text-[11px] text-muted-foreground">
+                {fmtH(kpiGlobal.horasNocturna)}h sobre {WEEKLY_NOCTURNA}h/aula
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-3">
