@@ -1,30 +1,42 @@
-# Auditoría técnica — Frontend AulaSync
+# Documentación técnica — LlaveroFront
 
-Índice de la documentación técnica del frontend de AulaSync (React + Vite, arquitectura feature-first). Cada archivo cubre propósito, componentes, diagrama de dependencias, servicios API, flujos de usuario, puntos de inflexión, dependencias cruzadas y riesgos de auditoría de una feature de `src/features/`.
-
-Repo auditado: `/home/danso/proyectos/uco/AulaSyncFrontend` (rama `develop`).
+Trazado por feature del frontend (React + Vite, arquitectura feature-first). Cada archivo cubre propósito, componentes, dependencias, servicios API, flujos de usuario, puntos de inflexión y riesgos de una feature de `src/features/`.
 
 ## Índice de features
 
-| Feature | Resumen |
-|---|---|
-| [auth](./auth.md) | Login, `authStore` (zustand+persist), `ProtectedRoute` por rol e interceptor axios de refresh de token; refresco duplicado y hook `useAuth` sin consumidores. |
-| [perfil](./perfil.md) | Edición de datos propios y cambio de contraseña vía `usuariosApi`; bug de UX por falta de prop `error` en el campo de nueva contraseña. |
-| [catalogos](./catalogos.md) | CRUD agrupado de salones, ubicaciones, bloques y tipos de silletería; acoplamiento bloque↔salón por nombre en lugar de ID. |
-| [programacion](./programacion.md) | Importación de horarios desde Excel, vista admin por semestres vs. vista auxiliar de semestre vigente, entrega de llave al iniciar clase. |
-| [gestion-salones](./gestion-salones.md) | Reservas individuales de salones (`/gestion-salones` es un wrapper de `features/reservas`); endpoints aprobar/rechazar sin caller detectado. |
-| [reservas-semestrales](./reservas-semestrales.md) | Reservas recurrentes por semestre con múltiples franjas horarias; cuatro hooks de API exportados sin uso. |
-| [nfc](./nfc.md) | Consola del lector NFC/ESP32 compartido: protocolo de intención/cola por WebSocket; riesgo de limpieza cruzada de listeners del socket singleton. |
-| [llaves](./llaves.md) | Módulo API de dominio de llaves (`llavesApi.js`), reutilizado por historial/nfc/programación/novedades/notificaciones; UI propia (`LlavesPage`) confirmada como código muerto. |
-| [historial](./historial.md) | Registro y exportación de entregas/devoluciones de llave; devolución con ubicación hardcodeada a "Oficina". |
-| [equipos](./equipos.md) | Inventario de equipos con estado cruzado contra préstamos abiertos y generación de códigos de barras. |
-| [prestamos](./prestamos.md) | Flujo de préstamo/devolución de equipos, dependiente de `equiposApi` y `comunidadApi`, sin integración NFC. |
-| [monitores](./monitores.md) | Registro de monitores/auxiliares académicos; único módulo del bloque con integración NFC real. |
-| [notificaciones](./notificaciones.md) | Centro de notificaciones (tabs Enviar/Historial/Configuración) con doble polling; `ConfiguracionTab` es la versión activa de la configuración. |
-| [novedades](./novedades.md) | Registro de incidencias sobre llaves/equipos; control de rol ADMIN solo en cliente, sin guard de ruta. |
-| [comunidad](./comunidad.md) | CRUD de personas restringido a ADMIN; llamadas API imperativas fuera de React Query en búsquedas por carnet/documento. |
-| [configuracion](./configuracion.md) | Página huérfana no enrutada (`/configuracion` redirige a `/notificaciones`); versión anterior y más simple de `ConfiguracionTab`. |
-| [usuarios](./usuarios.md) | Alta y gestión de cuentas restringida a ADMIN; sin selector de rol en creación y política de contraseña validada solo en cliente. |
+| Feature | Ruta | Resumen |
+|---|---|---|
+| [auth](./auth.md) | `/login`, `/auth-callback` | Login Office 365, `authStore` (zustand+persist), `ProtectedRoute` por rol e interceptor axios de refresh. |
+| [perfil](./perfil.md) | `/perfil` | Datos propios y cambio de contraseña (solo cuentas locales). |
+| [catalogos](./catalogos.md) | `/salones` | CRUD de salones, ubicaciones, bloques y tipos de silletería. |
+| [programacion](./programacion.md) | `/programacion` | Importación de horarios desde Excel, vistas por semestre. |
+| [ocupacion](./ocupacion.md) | `/ocupacion` | Dashboard de ocupación de aulas por jornada, día, facultad y bloque. |
+| [gestion-salones](./gestion-salones.md) | `/gestion-salones` | Reservas individuales de salones; absorbe `/llaves` y `/reservas`. |
+| [reservas-semestrales](./reservas-semestrales.md) | `/reservas-semestrales` | Reservas recurrentes por semestre con múltiples franjas. |
+| [historial](./historial.md) | `/historial` | Registro y exportación de entregas/devoluciones de llave; lectura de carnet. |
+| [equipos](./equipos.md) | `/equipos` | Inventario con estado cruzado contra préstamos abiertos y códigos de barras. |
+| [prestamos](./prestamos.md) | `/prestamos` | Préstamo y devolución de equipos, con búsqueda de persona por carnet. |
+| [porteros](./porteros.md) | `/porteros` | Alta de cuentas de portería y asignación de permisos por bloque. |
+| [monitores](./monitores.md) | `/monitores` | Registro de monitores y auxiliares académicos. |
+| [notificaciones](./notificaciones.md) | `/notificaciones` | Centro de notificaciones (Enviar / Historial / Configuración). |
+| [novedades](./novedades.md) | `/novedades` | Incidencias sobre llaves, equipos o el aula, con catálogo de elemento afectado. |
+| [comunidad](./comunidad.md) | `/comunidad` | CRUD de personas, restringido a ADMIN. |
+| [configuracion](./configuracion.md) | `/configuracion` | Parámetros de préstamo y recordatorios por bloque. |
+| [usuarios](./usuarios.md) | `/usuarios` | Alta y gestión de cuentas, restringido a ADMIN. |
+| [llaves](./llaves.md) | — | Módulo API de dominio (`llavesApi.js`) consumido por historial, programación, novedades y notificaciones. `LlavesPage.jsx` **no está enrutada**: `/llaves` redirige a `/gestion-salones`. |
+| [nfc](./nfc.md) | — | **Retirado.** El feature ya no existe en el código. |
+
+## Notas de navegación
+
+Tres rutas son redirecciones a otra pantalla, no vistas propias:
+
+```
+/llaves               → /gestion-salones
+/reservas             → /gestion-salones
+/notificaciones-llaves → /notificaciones
+```
+
+`LlavesPage.jsx` sigue en el repo pero ningún módulo la importa — solo aparece citada en un comentario de `HistorialPage.jsx`. Cualquier cambio de comportamiento sobre llaves tiene que ir a `HistorialPage` o a `gestion-salones`, no ahí.
 
 ## Diagrama de dependencias de alto nivel
 

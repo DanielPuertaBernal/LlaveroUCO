@@ -6,35 +6,36 @@ Gestiona préstamos de **equipos** (proyectores, controles, etc.) — dominio co
 
 ## 2. Modelo de datos
 
-`src/features/prestamos/prestamo.schema.js` — define `Prestamo` (colección `prestamos`) y `Devolucion` (colección `devoluciones`), sin archivo `model` separado.
+Cuatro tablas (migración `006_prestamos_devoluciones.js`, ampliada por la 009, 017 y 024). A diferencia de llaves, **préstamo y devolución son tablas distintas**, y cada equipo del préstamo es una línea propia.
 
-**`detalleEquipoSchema`** (subdocumento embebido, `_id:false`, líneas 9-24):
+### `prestamos` — cabecera
 
-| Campo | Detalle |
+| Columna | Detalle |
 |---|---|
-| `equipo_id` | ObjectId ref `Equipo`, required |
-| `equipo_nombre`, `equipo_marca`, `equipo_codigo`, `equipo_codigo_barras` | String, default `''` |
-| `equipo_consecutivo` | Number, default `0` |
-| `estado_equipo` | enum `['entregado','devuelto']`, default `'entregado'` — máquina de estados del ítem |
-| `fecha_entrega` | Date, default `Date.now` |
-| `fecha_devolucion` | Date, default `null` |
-| `auxiliar_que_recibio_devolucion`, `tipo_entrega` (enum `['manual','carnet','']`) | |
+| `docente_comunidad_id` → `comunidad` | solicitante; `docente_codigo_nfc` guarda su **número de documento** y `docente_nombre` el snapshot |
+| `solicitante_tipo` | CHECK: `docente`, `estudiante`, `empleado`, `''` |
+| `docente_responsable_id` → `comunidad`, `docente_responsable_nombre` | obligatorio cuando el solicitante es estudiante |
+| `auxiliar_prestamista` | default `'Auxiliar'` |
+| `fecha_prestamo` | timestamptz NOT NULL, default `now()` (migración 024) |
+| `estado` | CHECK: `activo`, `parcialmente_devuelto`, `completamente_devuelto` |
+| `gestionado_por_usuario_id` → `usuarios` | quién procesó el préstamo |
+| `ubicacion_prestamo_id` | snapshot histórico congelado, ver [catálogos](./catalogos.md) |
 
-**`prestamoSchema`** (colección `prestamos`, líneas 26-44):
+`docente_codigo_nfc` es un nombre heredado: **contiene el documento, no el id de carnet**. Los dos son numéricos pero distintos, así que cruzar un carnet escaneado contra esta columna no encuentra nada — hay que resolver la persona contra `comunidad` primero.
 
-| Campo | Detalle |
-|---|---|
-| `docente_codigo_nfc` | String, required, indexado |
-| `docente_nombre`, `auxiliar_prestamista` (default `'Auxiliar'`), `ubicacion_prestamo` | |
-| `solicitante_tipo` | enum `['docente','estudiante','empleado','']` |
-| `docente_responsable_codigo`/`nombre` | caso estudiante bajo responsabilidad de un docente |
-| `equipos` | array de `detalleEquipoSchema` |
-| `estado` | enum `['activo','parcialmente_devuelto','completamente_devuelto']`, default `'activo'`, indexado — máquina de estados del préstamo |
-| `fecha_prestamo` | Date, default `Date.now` |
+### `prestamo_equipos` — línea por equipo
 
-**No existe campo de fecha límite/plazo de devolución** — el préstamo de equipos no tiene concepto de "vencido" ni mora, a diferencia de `llaves`.
+`prestamo_id`, `equipo_id`, snapshots (`equipo_nombre`, `equipo_marca`, `equipo_codigo`, `equipo_consecutivo`, `equipo_codigo_barras`), `estado_equipo` (CHECK: `entregado`, `devuelto`), `fecha_entrega`, `fecha_devolucion`, `auxiliar_que_recibio_devolucion`, `tipo_entrega` (CHECK: `manual`, `carnet`, `''`).
 
-**`devolucionSchema`** (colección `devoluciones`, líneas 61-73): `prestamo_id` (ref, required, indexado), `equipos_devueltos` (subdocumento: `equipo_id`, `nombre`, `cantidad` default 1, `estado` default `'bueno'`), `auxiliar_que_recibio`, `fecha_devolucion`, `es_devolucion_completa`.
+Los snapshots son deliberados: el histórico tiene que seguir mostrando cómo se llamaba el equipo cuando salió, aunque después lo renombren.
+
+La migración 017 agrega un único parcial que impide que el mismo equipo esté `entregado` en dos préstamos a la vez.
+
+### `devoluciones` y `devolucion_equipos`
+
+`devoluciones`: `prestamo_id`, `docente_comunidad_id`, `docente_codigo_nfc`, `docente_nombre`, `ubicacion_devolucion_id`, `auxiliar_que_recibio`, `es_devolucion_completa`, `gestionado_por_usuario_id`. `devolucion_equipos` lista los equipos de esa devolución.
+
+Al ser tabla propia, el gestor de la devolución no pisa al del préstamo — el problema que en llaves hizo falta resolver con la migración 022.
 
 ## 3. Diagrama de clases / dependencias
 

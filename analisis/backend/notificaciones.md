@@ -6,26 +6,33 @@ Motor de envío y auditoría de **correos electrónicos transaccionales** relaci
 
 ## 2. Modelo de datos
 
-`src/features/notificaciones/notificacion.schema.js:4-65`, colección `notificaciones`, sin `versionKey`.
+Tabla `notificaciones` (migración `007_reservas_nfc_notificaciones_novedades.js`).
 
-| Campo | Detalle |
+### Destinatario y contenido
+
+`destinatario_nombre`, `destinatario_documento`, `destinatario_correo`, `numero_contacto_destinatario`, `tipo_mensaje` (default `predeterminado`), `asunto`, `mensaje`.
+
+### Origen
+
+`llave_id` → `registros_llaves`, `reserva_id` → `reservas`, `salon_id` → `salones` (+ `salon` snapshot), `tipo_notificacion` (default `manual`), `numero_recordatorio` (cuántos van para el mismo préstamo).
+
+Delegación: `es_delegado` y `nombre_docente_representado`, para cuando reclama un monitor en nombre del docente.
+
+### Envío y reintentos
+
+| Columna | Detalle |
 |---|---|
-| `destinatario_nombre`, `destinatario_documento`, `destinatario_correo` | required |
-| `tipo_mensaje` | enum `['predeterminado','personalizado']` |
-| `asunto` (required), `mensaje` | |
-| `llave_id` | ref `Llave` |
-| `prestamo_llave_id` | ObjectId **sin `ref`** (inconsistencia) |
-| `reserva_id` | ref `Reserva` |
-| `salon` | |
-| `tipo_notificacion` | enum `['manual','vencimiento_inicial','recordatorio','reserva_no_reclamada','delegado_vencimiento','delegado_recordatorio']`, default `'manual'` |
-| `es_delegado`, `nombre_docente_representado` | delegación (persona recibe llave en representación de otro) |
-| `numero_recordatorio` | |
-| `estado_envio` | enum `['pendiente','enviado','fallido','descartado']`, default `'pendiente'` |
-| `intentos_envio`, `proximo_reintento`, `error_envio` | control de reintentos |
-| `enviado_por`, `fecha_envio` | auditoría |
-| `fecha_hora_prestamo`, `reserva_fecha/hora_inicio/hora_fin`, `horario_clase`, `materia` | snapshot denormalizado |
+| `estado_envio` | default `pendiente` |
+| `intentos_envio` | contador |
+| `proximo_reintento` | timestamptz — el scheduler la toma cuando vence |
+| `error_envio` | último error |
+| `enviado_por`, `fecha_envio` | |
 
-Índices: `{fecha_envio:-1}`, `{destinatario_documento, fecha_envio:-1}`, `{estado_envio, proximo_reintento}` (cola de reintentos), `{prestamo_llave_id, tipo_notificacion, numero_recordatorio}` único+sparse (evita duplicar recordatorio), `{reserva_id, tipo_notificacion}` único+sparse (evita duplicar aviso de no-reclamo).
+### Contexto congelado
+
+`fecha_hora_prestamo`, `reserva_fecha`, `reserva_hora_inicio`, `reserva_hora_fin`, `horario_clase`, `materia` se copian al crear la notificación para que el correo diga lo mismo aunque el préstamo cambie después.
+
+`MAIL_DRY_RUN` decide si se envía de verdad. Por defecto es dry-run fuera de producción: el relay es el institucional y las bases de desarrollo tienen direcciones reales, así que enviar tiene que ser una decisión explícita.
 
 ## 3. Diagrama de clases / dependencias
 

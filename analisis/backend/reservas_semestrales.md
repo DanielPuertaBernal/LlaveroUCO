@@ -11,16 +11,22 @@ Comparación:
 
 ## 2. Modelo de datos
 
-**No existe schema propio** — `reservas_semestrales.repository.js` importa directamente `{Programacion}` de `../programacion/programacion.schema`. Todo el módulo lee/escribe la colección `programacion` filtrando por `tipo:'semestral'`.
+No tiene tabla propia: es el subtipo `semestral` de la herencia de [`programacion`](./programacion.md). La cabecera vive en `programaciones` y lo específico en `programaciones_semestrales`, que comparte la PK (`programacion_id`).
 
-Campos relevantes del schema compartido (`programacion.schema.js:4-48`) para `semestral`:
-- `tipo` (enum, requerido, default `'programacion'`)
-- `semestre`, `fecha_inicio_semestre`/`fecha_fin_semestre` — rango de vigencia
-- `numero_documento` (requerido), `docente`, `dia` (String libre, no enum), `horario`/`hora_inicio`/`hora_fin`, `aula`, `facultad`, `materia`
-- **Exclusivos de `semestral`**: `consecutivo`, `i_cancelada` (Number, sin default), `fecha_cancelacion`, `motivo_cancelacion`
-- **Reservas manuales**: `grupo_id` (agrupa franjas de una misma solicitud), `creado_manualmente` (Boolean), `tipo_solicitante` (enum docente/estudiante), `responsable_documento`/`responsable_nombre`, `nombre_bloque`
+Columnas exclusivas del subtipo:
 
-Sin índice único que impida duplicar franjas — la anti-solapación se hace 100% en código de aplicación.
+| Columna | Detalle |
+|---|---|
+| `consecutivo` | numeración de la solicitud |
+| `grupo_id` | agrupa las franjas de una misma solicitud, para cancelarlas juntas |
+| `cancelada`, `fecha_cancelacion`, `motivo_cancelacion` | la cancelación es un flag, no un borrado |
+| `creado_manualmente` | distingue lo cargado por Excel de lo dado de alta a mano |
+| `tipo_solicitante`, `responsable_id`, `responsable_nombre` | quién pide y quién responde |
+| `bloque_id` | bloque de la reserva |
+
+De la cabecera compartida usa `semestre_id`, `docente_id`, `dia`, `horario`, `hora_inicio`/`hora_fin`, `salon_id`, `aula`, `facultad` y `materia`. Las lecturas van contra la vista `v_programaciones`, que ya resuelve el JOIN entre cabecera y subtipo.
+
+`cancelada` es booleano. En el modelo Mongo original era un número sin default, lo que obligaba a comparar con cuidado; la migración lo normalizó.
 
 ## 3. Diagrama de clases / dependencias
 
@@ -106,7 +112,7 @@ flowchart TD
 
 ## 5. Hallazgo crítico: comparte colección física con `programacion`
 
-`reservas_semestrales.repository.js` y `.service.js` importan el **mismo modelo Mongoose `Programacion`** que usa el módulo `programacion`, apuntando a la misma colección física. El campo `tipo` actúa como discriminador manual (no un discriminator real de Mongoose). Esto explica por qué `app.js` monta ambos routers bajo el mismo prefijo `/api/programacion` (líneas 56 y 70) — no es error de nomenclatura, refleja que ambos módulos son vistas distintas sobre la misma tabla física, con namespaces de rutas disjuntos (`/reservas-semestrales/*` vs. rutas raíz de `programacion`).
+`reservas_semestrales` y `programacion` comparten la **misma cabecera física** (`programaciones`), con `tipo` como discriminador y una tabla por subtipo que comparte la PK. Esto explica por qué `app.js` monta ambos routers bajo el mismo prefijo `/api/programacion` (líneas 56 y 70) — no es error de nomenclatura, refleja que ambos módulos son vistas distintas sobre la misma tabla física, con namespaces de rutas disjuntos (`/reservas-semestrales/*` vs. rutas raíz de `programacion`).
 
 ## 6. Lógica de solapamiento triplicada (hallazgo de mayor relevancia)
 

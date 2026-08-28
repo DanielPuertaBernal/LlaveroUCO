@@ -6,26 +6,29 @@ Gestiona reservas puntuales (ad-hoc, de una fecha/horario específico) de salone
 
 ## 2. Modelo de datos
 
-`src/features/reservas/reserva.schema.js:4-42`, colección `reservas`, `timestamps:true`, `versionKey:false`.
+Tabla `reservas` (migración `007_reservas_nfc_notificaciones_novedades.js`).
 
-| Campo | Detalle | Línea |
-|---|---|---|
-| `solicitante_documento`, `solicitante_nombre` | required, indexado | 6-7 |
-| `nombre_bloque`, `nombre_salon` | required, indexados | 8-9 |
-| `fecha` | Date, required, indexado | 10 |
-| `hora_inicio`/`hora_fin` | String "HH:MM", required | 11-12 |
-| `motivo` | default `''` | 13 |
-| `estado` | enum `['pendiente','aprobada','rechazada','cancelada','completada','no_reclamada']`, default `'pendiente'`, indexado | 14-19 |
-| `entregar_llave` | Boolean, default `true` | 20 |
-| `llave_entregada` | Boolean, default `false` | 21 |
-| `llave_prestamo_id` | ObjectId ref `Llave` | 22 |
-| `checkin_estado` | enum `['entregado_oficina','pendiente_nfc','nfc_anticipado','nfc_en_tiempo','nfc_retraso','no_show']`, default `'pendiente_nfc'`, indexado | 23-28 |
-| `checkin_canal` | enum `['oficina','nfc','']` | 29 |
-| `tipo_solicitante` | enum `['docente','estudiante']`, default `'docente'` | 31 |
-| `responsable_documento`/`responsable_nombre` | cuando solicitante es estudiante | 32-33 |
-| `aprobado_por`, `creado_por_rol` | | 34-35 |
+### Solicitud
 
-**Índice compuesto único parcial** (líneas 44-47): `{nombre_salon, fecha, hora_inicio}` único solo entre `estado in [pendiente, aprobada]` — impide duplicar `hora_inicio` exacta, **no** solapamientos parciales.
+`solicitante_comunidad_id` → `comunidad` (+ `solicitante_nombre` snapshot), `tipo_solicitante` (default `docente`), `responsable_comunidad_id`/`responsable_nombre` para cuando el solicitante necesita respaldo, `bloque_id`, `salon_id`, `fecha` (`date`), `hora_inicio`/`hora_fin` (`time`), `motivo`, `estado` (default `pendiente`), `creado_por_rol`.
+
+### Aprobación
+
+`aprobado_por_usuario_id` → `usuarios`, `aprobado_por_nombre`.
+
+### Llave y check-in
+
+| Columna | Detalle |
+|---|---|
+| `entregar_llave` | default `true`; hay reservas que no requieren llave |
+| `llave_entregada` | bool |
+| `registro_llave_id` → `registros_llaves` | el registro que se creó al entregarla |
+| `checkin_estado` | default `pendiente_nfc` |
+| `checkin_canal`, `checkin_at` | por dónde y cuándo se confirmó la presencia |
+
+### Exclusión de solapamiento
+
+La migración 018 agrega una restricción de exclusión que impide reservar el mismo salón en franjas que se pisan. La garantía es de la base, no de una verificación previa en el servicio: dos solicitudes concurrentes no pueden colarse.
 
 ## 3. Diagrama de clases / dependencias
 

@@ -6,19 +6,33 @@ Catálogo maestro de personas de la universidad (docentes, estudiantes, empleado
 
 ## 2. Modelo de datos
 
-`src/features/comunidad/comunidad.schema.js:1-26` — colección `comunidad`, `versionKey: false`.
+Tabla `comunidad` (migración `002_catalogos.js`).
 
-| Campo | Tipo / reglas | Línea |
+| Columna | Tipo | Detalle |
 |---|---|---|
-| `numero_documento` | String, `required`, **`unique`**, `trim` | :8 |
-| `nombre` | String, `required`, `trim` | :9 |
-| `tipo` | String, `required`, `enum: TIPOS_COMUNIDAD` = `['docente','estudiante','empleado']`, `index: true` | :10, :4 |
-| `facultad` | String, default `''`, `trim` | :11 |
-| `correo` | String, default `''`, `trim`, `lowercase` | :12 |
-| `id_carnet` | String, default `''`, `trim` — **no requerido, no único** | :13 |
-| `numero_contacto` | String, default `''`, `trim` | :14 |
+| `id`, `created_at`, `updated_at`, `deleted_at` | — | columnas universales |
+| `numero_documento` | text NOT NULL | único entre los no borrados |
+| `nombre` | text NOT NULL | |
+| `tipo` | text NOT NULL | CHECK: `docente`, `estudiante`, `empleado` |
+| `facultad` | text | |
+| `correo` | text | |
+| `id_carnet` | text | **no único** — ver §5 |
+| `numero_contacto` | text | |
+| `es_estudiante` | bool NOT NULL | default `false` |
+| `es_empleado` | bool NOT NULL | default `false` |
 
-Índices: unique en `numero_documento` (:8), `tipo` (:10), texto en `nombre` (:22), `id_carnet: 1` (:23, no único — ver §5).
+`tipo` guarda la categoría principal, mientras que `es_estudiante`/`es_empleado` permiten que una persona sea las dos cosas a la vez — el caso del empleado que además estudia, que un enum de un solo valor no puede representar.
+
+### Índices
+
+```
+ux_comunidad_numero_documento  (numero_documento) WHERE deleted_at IS NULL
+idx_comunidad_tipo             (tipo)
+idx_comunidad_id_carnet        (id_carnet)         -- no único
+idx_comunidad_nombre_trgm      GIN (immutable_unaccent(nombre) gin_trgm_ops)
+```
+
+El índice trigram sostiene la búsqueda por nombre sin acentos. `immutable_unaccent` debe calificar el esquema (`public.unaccent`) o Postgres falla al inlinear la función durante el `CREATE INDEX` — ver migración `001_extensions_and_functions.js`.
 
 ## 3. Diagrama de clases / dependencias
 
@@ -154,6 +168,6 @@ sequenceDiagram
 
 - **`POST /sync` público sin ninguna mitigación** (`comunidad.routes.js:162`): sin `requireAuth`, sin API key/secreto compartido, sin allowlist de IP, sin rate limiter (`nfcLimiter`/`authLimiter` existen en `rate.limiter.js` pero no se aplican aquí). Permite a cualquier actor no autenticado sobrescribir `id_carnet` de cualquier persona y así potencialmente suplantar identidad en el flujo NFC de llaves, o degradar el servicio con payloads inválidos en bucle.
 - **Estado parcial invisible en sync masivo**: con `ordered:false` en `bulkWrite`, un error a mitad de lote puede dejar parte de los registros persistidos mientras el cliente recibe un error genérico interpretándolo como fallo total.
-- **Falta de `runValidators`** en escrituras del repositorio — red de seguridad de Mongoose ausente si en el futuro se llama al repositorio sin pasar por el service.
+- **La validación de forma vive solo en el service**: el repositorio escribe lo que le pasen. Los CHECK de la tabla cubren `tipo`, pero el resto de las reglas (formato de correo, normalización de documento) se pierden si se llama al repositorio sin pasar por el service.
 - **Sin validación de formato** para `numero_documento` ni `id_carnet` (acepta cualquier string tras `trim`).
 - **Módulos consumidores acoplados al repositorio, no al service** — cualquier cambio de contrato en `ComunidadRepository` impacta directamente a 6+ módulos sin pasar por la capa de negocio del propio dominio.

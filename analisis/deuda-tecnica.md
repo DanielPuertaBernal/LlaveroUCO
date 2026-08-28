@@ -7,7 +7,7 @@ Consolidado de los hallazgos de la auditoría (2026-08-06) sobre los 3 repos. De
 | Hallazgo | Riesgo |
 |---|---|
 | Cero cobertura de tests en todo el backend | Alto |
-| Sin transacciones Mongo en `llaves` | Alto — doble préstamo concurrente de la misma llave. **Corrección**: `prestamos` (equipos) sí usa `mongoose.startSession()`/transacciones en `crear()` y `registrarDevolucion()` (`prestamo.service.js`) — el riesgo real es exclusivo de `llaves`, no de ambos como se dijo originalmente |
+| ~~Sin transacciones en `llaves`~~ **Resuelto** | Ambos dominios usan transacciones: `llaves` encadena sus inserts en `knex.transaction()` (`llave.write-model.js`, `llave.workflows.js`) y `prestamos` hace lo propio en `crear()`/`registrarDevolucion()` |
 | Lógica de solapamiento de horarios triplicada en `programacion`/`reservas`/`reservas_semestrales` | Medio — candidato a unificar |
 | Relaciones entre catálogos por texto plano (nombre), sin integridad referencial | Medio |
 | Varios módulos acceden a schemas de otros módulos saltándose la capa `repository` | Medio — bypass de capas |

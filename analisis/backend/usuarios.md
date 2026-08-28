@@ -6,28 +6,21 @@ Gestiona los usuarios internos del sistema (staff con acceso a AulaSync: adminis
 
 ## 2. Modelo de datos
 
-`src/features/usuarios/usuario.schema.js` **no define schema propio** — re-exporta el de `auth` (`usuario.schema.js:5-6`). El schema real vive en `src/features/auth/auth.schema.js:27-89`, colección `usuarios`, `versionKey: false`.
+Comparte la tabla `usuarios` con [`auth`](./auth.md), donde está documentada en detalle. Este módulo es el CRUD administrativo sobre ella; `auth` maneja login, sesiones y rotación de tokens.
 
-| Campo | Tipo / reglas | Línea |
-|---|---|---|
-| `usuario` | String, required, **unique**, trim, min 3/max 50 | auth.schema.js:29-36 |
-| `nombre` | String, required, trim, min 2 | :37-42 |
-| `email` | String, required, **unique**, trim, lowercase, regex `/^\S+@\S+\.\S+$/` | :43-50 |
-| `contacto` | String, default `''`, trim | :51-55 |
-| `rol` | String, enum `Object.values(ROLES)`, required | :56-60 |
-| `hash_password` | String, required, **`select:false`** | :61-65 |
-| `activo` | Boolean, default `true` | :66-69 |
-| `numero_documento` | String, default `''`, trim (vínculo opcional a `comunidad`, sin índice ni unique) | :70-74 |
-| `sesiones` | `[sesionSchema]`, default `[]`, **`select:false`** | :75-79 |
-| `fecha_creacion` | Date, default `Date.now` | :80-83 |
+Lo que conviene tener presente acá:
 
-`sesionSchema` (auth.schema.js:15-25, `_id:false`): `token_hash` (required), `user_agent`, `ip`, `created_at`, `expires_at` (required), `revoked_at` — refresh-token rotation embebido en el propio documento.
+| Columna | Detalle relevante para el CRUD |
+|---|---|
+| `rol` | CHECK: `admin_programacion`, `auxiliar_programacion`, `superadmin`, `porteria` |
+| `proveedor_auth` | `local` u `office365`. Las de Office 365 tienen `hash_password` NULL |
+| `hash_password` | nullable; nunca se devuelve en las respuestas |
+| `activo` | desactivar en vez de borrar es el camino normal |
+| `numero_documento` | vínculo opcional a `comunidad`, sin FK |
 
-`ROLES` (auth.schema.js:10-13): `ADMIN: 'admin_programacion'`, `AUX: 'auxiliar_programacion'` (solo 2 roles; los "monitores" son otro dominio distinto).
+Los usuarios con rol `porteria` tienen además permisos por bloque en `portero_bloques` — ver [porteros](./porteros.md).
 
-`passwordSchema` (Zod, auth.schema.js:93-100): min 8, max 72, requiere mayúscula, minúscula, número y carácter especial.
-
-Índices: solo los implícitos por `unique` en `usuario` y `email`.
+Únicos parciales sobre `usuario` y `email`, solo entre filas no borradas.
 
 ## 3. Diagrama de clases / dependencias
 
@@ -160,7 +153,7 @@ sequenceDiagram
 - `src/app.js:15` monta las rutas.
 - `auth.service.js:7` — `usuarioRepository.findById()` en `refresh()` y `getMe()`.
 - `auth.middleware.js:8,33-36` — `usuarioRepository.findById()` en `verifyToken()`, valida que el usuario del JWT siga activo en cada request. **Acoplamiento bidireccional** con `auth` (auth depende de usuarios.repository y usuarios depende de auth.repository/service).
-- Otros módulos (`llaves`, `prestamos`, `ubicaciones`) **no importan `usuarios` directamente**; consumen datos denormalizados vía `req.user` poblado por `auth.middleware` desde el JWT, guardando copias sueltas de nombre/id (`reportado_por`, `auxiliar_prestamista`, etc.) sin `ref: 'Usuario'` en el schema — no hay integridad referencial de Mongoose entre estos módulos y `usuarios`.
+- Otros módulos **no importan `usuarios` directamente**; consumen `req.user`, poblado por `auth.middleware` desde el JWT. La trazabilidad de quién gestionó una operación sí es FK real (`gestionado_por_usuario_id` en `registros_llaves`, `prestamos` y `devoluciones`, más `gestionado_por_devolucion_usuario_id`); lo que queda denormalizado son campos de texto libre como `auxiliar_prestamista` y `enviado_por`.
 
 ## 7. Riesgos y observaciones de auditoría
 
@@ -172,4 +165,4 @@ sequenceDiagram
 - **Acoplamiento bidireccional `auth` ↔ `usuarios`** dificulta el aislamiento real del vertical slice.
 - **`numero_documento` sin índice ni unicidad** pese a usarse como clave de vinculación cruzada — riesgo de performance y de que dos usuarios queden vinculados al mismo registro de comunidad.
 - **`checkDuplicates` no atómico con `create`** — ver §5.
-- **Sin integridad referencial de Mongoose** (`ref`) entre `llaves`/`prestamos` y `usuarios` — toda trazabilidad de autoría es copia denormalizada de texto, no relación viva.
+- **Trazabilidad mixta**: la autoría de las operaciones es FK real desde la migración 009, pero conviven campos de texto libre heredados (`auxiliar_prestamista`, `enviado_por`, `cargado_por`) que no apuntan a ningún usuario.

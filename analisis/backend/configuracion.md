@@ -6,15 +6,17 @@ Gestiona parámetros de **préstamo de llaves y notificaciones de vencimiento po
 
 ## 2. Modelo de datos
 
-`src/features/configuracion/configuracion.schema.js:4-38`, colección **`configuracion_bloques`**, `timestamps:true`, `versionKey:false`. No es documento único — es colección clave-valor por bloque, donde `nombre_bloque` es la clave (único). Un registro especial `nombre_bloque:'__defaults__'` actúa como pseudo-singleton de valores por defecto globales, coexistiendo en la misma colección.
+Tabla `configuracion_bloques` (migración `002_catalogos.js`): los parámetros de préstamo y recordatorio son **por bloque**, no globales.
 
-| Campo | Tipo | Default | Validación |
-|---|---|---|---|
-| `nombre_bloque` | String | — | required, unique, trim |
-| `tiempo_maximo_prestamo_minutos` | Number | 120 | min 5 (sin tope superior en Mongoose) |
-| `intervalo_recordatorio_minutos` | Number | 30 | min 5 (sin tope superior en Mongoose) |
-| `max_recordatorios` | Number | 5 | min 1, max 20 |
-| `notificaciones_activas` | Boolean | true | — |
+| Columna | Default | Qué controla |
+|---|---|---|
+| `bloque_id` → `bloques` | — | a qué bloque aplica |
+| `tiempo_maximo_prestamo_minutos` | 120 | cuándo un préstamo entra en mora |
+| `intervalo_recordatorio_minutos` | 30 | cada cuánto reintenta el recordatorio |
+| `max_recordatorios` | 5 | tope de recordatorios por préstamo |
+| `notificaciones_activas` | `true` | interruptor por bloque |
+
+Estos valores son los que el scheduler de notificaciones usa para pasar un registro a `en_mora`/`demora_entrega`. No hay hardcode de umbrales en el código de estado: lo decide esta tabla.
 
 ## 3. Diagrama de clases / dependencias
 
@@ -74,7 +76,7 @@ sequenceDiagram
 ## 5. Puntos de inflexión
 
 - **Sin caché en memoria**: cada llamada golpea Mongo directamente — el scheduler de notificaciones evalúa préstamo por préstamo cada 5 minutos, generando N queries repetidas por ciclo para el mismo bloque.
-- **Doble capa de validación desalineada**: Zod en rutas limita `max(1440)` en los minutos, pero el schema Mongoose no tiene tope superior — si se escribe directo a Mongo (seed/script) se puede violar el límite de Zod.
+- **Validación solo en la capa HTTP**: Zod limita los minutos a `max(1440)` en las rutas, pero `configuracion_bloques` no tiene ningún CHECK que lo respalde. Un seed o un script que escriba directo a la base puede dejar valores fuera de rango que el scheduler después consume sin chistar.
 - **Cascada de defaults en 3 niveles inconsistentes entre sí**: `DEFAULTS_FALLBACK` (120/30/5) vs. `DEFAULTS_SIN_BLOQUE` (60/15/2, más estricto) vs. documento Mongo `__defaults__` — sin bootstrap automático que persista `__defaults__` al arrancar la app. Dos rutas de "sin bloque específico" pueden devolver valores numéricos distintos.
 
 ## 6. Dependencias externas/cruzadas
@@ -88,7 +90,7 @@ sequenceDiagram
 ## 7. Riesgos y observaciones de auditoría
 
 - **Sin tests**: cero cobertura confirmada; lógica de cascada de defaults no trivial y sin protección de tests.
-- **Inconsistencia de límites Zod vs Mongoose** — solo protege si se escribe vía API.
+- **El tope de minutos no está en la base** — solo protege si se escribe vía API.
 - **Dos conjuntos de defaults divergentes** sin comentario que explique la intención — riesgo de que un cambio futuro en uno no se replique en el otro.
 - **N+1 queries en el scheduler** — sin caché, escala linealmente con préstamos activos concurrentes.
 - **`guardarDefaults` no filtra campos** a diferencia de `guardar`, que sí lo hace explícitamente — confía enteramente en la validación Zod de la ruta.

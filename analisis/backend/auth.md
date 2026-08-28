@@ -2,28 +2,44 @@
 
 ## 1. Propósito
 
-Centraliza autenticación/autorización de la API: emisión y verificación de JWT (access + refresh), gestión de sesiones de refresh persistidas en el propio documento de usuario, y middlewares de guardia de rutas (`requireAuth`, `requireAdmin`, `requireAux`) usados por prácticamente todos los demás features. Define el único modelo Mongoose `Usuario` (colección `usuarios`), que el feature `usuarios/` reutiliza por re-exportación.
+Centraliza autenticación/autorización de la API: emisión y verificación de JWT (access + refresh), login institucional Office 365, sesiones de refresh en la tabla `usuario_sesiones`, y middlewares de guardia de rutas (`requireAuth`, `requireAdmin`, `requireAux`) usados por prácticamente todos los demás features. Es dueño de la tabla `usuarios`, sobre la que el feature `usuarios/` hace el CRUD administrativo.
 
 ## 2. Modelo de datos
 
-`src/features/auth/auth.schema.js`, colección `usuarios`, `versionKey: false` (líneas 86-87).
+Tablas `usuarios` y `usuario_sesiones` (migración `003_usuarios.js`, ampliada por la 009). Las sesiones dejaron de ser un array embebido en el documento del usuario y pasaron a tabla propia.
 
-| Campo | Tipo / reglas | Línea |
+### `usuarios`
+
+| Columna | Tipo | Detalle |
 |---|---|---|
-| `usuario` | String, required, **unique**, trim, min 3/max 50 | 29-36 |
-| `nombre` | String, required, trim, min 2 | 37-42 |
-| `email` | String, required, **unique**, trim, lowercase, regex `/^\S+@\S+\.\S+$/` | 43-50 |
-| `contacto` | String, default `''` | 51-55 |
-| `rol` | String, enum `Object.values(ROLES)`, required | 56-60 |
-| `hash_password` | String, required, **`select:false`** | 61-65 |
-| `activo` | Boolean, default `true` | 66-69 |
-| `numero_documento` | String, default `''` | 70-74 |
-| `sesiones` | `[sesionSchema]`, default `[]`, **`select:false`** | 75-79 |
-| `fecha_creacion` | Date, default `Date.now` | 80-83 |
+| `id`, `created_at`, `updated_at`, `deleted_at` | — | columnas universales |
+| `usuario` | text NOT NULL | único entre los no borrados |
+| `nombre` | text NOT NULL | |
+| `email` | text NOT NULL | único entre los no borrados |
+| `contacto` | text | |
+| `rol` | text NOT NULL | CHECK: `admin_programacion`, `auxiliar_programacion`, `superadmin`, `porteria` |
+| `hash_password` | text NULL | **nullable**: las cuentas Office 365 no tienen contraseña local |
+| `activo` | bool | default `true` |
+| `numero_documento` | text | vínculo opcional a `comunidad`, sin FK |
+| `proveedor_auth` | text NOT NULL | CHECK: `local`, `office365`; default `local` |
 
-`sesionSchema` (subdocumento, sin `_id`, líneas 15-25): `token_hash` (required), `user_agent`, `ip`, `created_at`, `expires_at` (required), `revoked_at`.
+### `usuario_sesiones`
 
-`ROLES` (líneas 10-13): `ADMIN:'admin_programacion'`, `AUX:'auxiliar_programacion'`. `passwordSchema` (Zod, líneas 93-100): min 8, max 72, requiere mayúscula, minúscula, dígito y carácter especial. Índices: solo los implícitos de `unique` en `usuario`/`email` — sin índice sobre `sesiones.token_hash`.
+`usuario_id` (FK a `usuarios`), `token_hash`, `user_agent`, `ip` (tipo `inet`), `expires_at`, `revoked_at`. Rotación de refresh tokens.
+
+### Índices
+
+```
+ux_usuarios_usuario             (usuario)    WHERE deleted_at IS NULL
+ux_usuarios_email               (email)      WHERE deleted_at IS NULL
+ux_usuario_sesiones_token_hash  (token_hash) WHERE deleted_at IS NULL
+idx_usuario_sesiones_usuario_id (usuario_id)
+idx_usuario_sesiones_expires_at (expires_at)
+```
+
+Los únicos son **parciales**: aplican solo a filas vivas, para que el borrado en blando no bloquee reutilizar un usuario o email. El lookup de refresh token tiene índice propio.
+
+`passwordSchema` (Zod): min 8, max 72, requiere mayúscula, minúscula, dígito y carácter especial. Solo aplica a cuentas `local`.
 
 ## 3. Diagrama de clases / dependencias
 
@@ -165,7 +181,7 @@ flowchart TD
 **Lo usan**:
 - `src/app.js` monta `/api/auth`.
 - `usuarios/usuario.service.js` — `hashPassword`/`verifyPassword`.
-- `usuarios/usuario.schema.js` re-exporta `Usuario`, `ROLES`, `passwordSchema`.
+- `usuarios/` opera sobre la misma tabla `usuarios`; `ROLES` y `passwordSchema` viven en `auth/auth.constants.js`.
 - **17 módulos** consumen `requireAuth` (prácticamente todas las rutas del sistema); **12 módulos** consumen `requireAdmin`.
 - `requireAux` está definido pero **sin consumidores** en todo el repo.
 - `shared/websocket/nfc.gateway.js` **reimplementa** la verificación JWT para el canal Socket.IO en vez de reutilizar `verifyToken` — ver riesgo §7.

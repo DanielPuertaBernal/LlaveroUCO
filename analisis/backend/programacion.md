@@ -4,27 +4,36 @@
 
 Gestiona la programación académica regular (horario de clases de docentes por salón) que alimenta el sistema de préstamo de llaves NFC. Comparte colección Mongo y schema con `reservas_semestrales` (ver módulo dedicado) mediante un campo discriminador `tipo`.
 
-## 2. Modelos de datos
+## 2. Modelo de datos
 
-### `Programacion` — `src/features/programacion/programacion.schema.js:4-62`, colección `programacion`
+Herencia por tabla: una cabecera común `programaciones` más una tabla por subtipo que comparte la PK. `tipo` discrimina cuál aplica.
 
-Schema **polimórfico compartido** entre programación regular, reservas semestrales y grupos "fantasma":
+### `programaciones` — cabecera
 
-| Campo | Detalle | Línea |
-|---|---|---|
-| `tipo` | enum `['programacion','semestral','fantasma']`, required, default `'programacion'` | 7 |
-| `semestre`, `fecha_inicio_semestre`, `fecha_fin_semestre` | vigencia | 8-12 |
-| `numero_documento` (required), `docente`, `dia`, `horario`, `hora_inicio`, `hora_fin`, `aula`, `facultad`, `materia`, `codigo_materia`, `grupo`, `nivel_grupo` | datos de la clase | 13-24 |
-| `estudiantes_prematriculados/matriculados/total_estudiantes` | | 25-27 |
-| `fantasma_de` | código de materia principal cuando `tipo='fantasma'` | 30 |
-| `consecutivo`, `i_cancelada`, `fecha_cancelacion`, `motivo_cancelacion` | exclusivos de `tipo='semestral'` | 32-35 |
-| `grupo_id`, `creado_manualmente`, `tipo_solicitante` (enum docente/estudiante), `responsable_documento`, `responsable_nombre`, `nombre_bloque` | reservas manuales | 37-42 |
+`semestre_id` → `programacion_semestres`, `docente_id` → `comunidad` (+ `docente_nombre` snapshot), `salon_id` → `salones` (+ `aula` snapshot), `dia`, `horario` (texto "07:00 A 09:00"), `hora_inicio`/`hora_fin` (`time`), `facultad`, `materia`, `codigo_materia`, `grupo`, `nivel_grupo`, `estudiantes_prematriculados`, `estudiantes_matriculados`, `total_estudiantes`, `observaciones`.
 
-Índices (líneas 50-59): `tipo`, `semestre`, `semestre+tipo`, `semestre+dia`, `tipo+dia`, `dia`, `numero_documento`, `aula`, `grupo_id`, `semestre+fantasma_de`. **No hay índice compuesto `dia+aula+hora_inicio+hora_fin`**.
+Dos flags de negocio:
 
-### `Semestre` — `programacion.semestre.schema.js:8-31`, colección `programacion_semestres`
+| Columna | Qué significa |
+|---|---|
+| `es_intensivo` | curso intensivo (migración 019) |
+| `sin_entrega_llave` | ocupa el aula pero no se le entrega llave al docente — el caso de las clases del colegio dictadas en aulas de la universidad (migración 020) |
 
-`codigo_raw`, `codigo` (único), `anio`, `periodo` (enum `[1,2]`), `fecha_inicio`, `fecha_fin`, `fecha_carga`, `cargado_por`, `total_registros`.
+### Subtipos
+
+- **`programaciones_regulares`**: solo la PK; la programación académica normal.
+- **`programaciones_semestrales`**: reserva recurrente de todo el semestre. `consecutivo`, `grupo_id` (agrupa las franjas de una misma solicitud), `cancelada` + `fecha_cancelacion` + `motivo_cancelacion`, `creado_manualmente`, `tipo_solicitante`, `responsable_id`/`responsable_nombre`, `bloque_id`.
+- **`programaciones_fantasma`**: grupos virtuales sin salón real. `fantasma_de_programacion_id` y `fantasma_de_codigo_materia` apuntan a la programación de la que derivan.
+
+### `programacion_semestres`
+
+`codigo_raw` y `codigo` (normalizado), `anio`, `periodo`, `fecha_inicio`/`fecha_fin` (`date`), `fecha_carga`, `cargado_por`, `total_registros`.
+
+### Vista `v_programaciones`
+
+Une la cabecera con sus subtipos para que las consultas de lectura no repitan los JOIN. Se recrea en la migración 021; cualquier cambio de columnas en `programaciones` obliga a recrearla.
+
+Las columnas `time` vuelven a la app como `"HH:MM"`: `pg.client.js` registra un parser para el OID 1083 que descarta los segundos, que no se usan en ningún cálculo.
 
 ## 3. Diagrama de clases / dependencias
 

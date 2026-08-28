@@ -8,22 +8,22 @@ Catálogo de inventario de equipos electrónicos prestables (proyectores, contro
 
 ## 2. Modelo de datos
 
-`Equipo` — `src/features/equipos/equipo.schema.js:8-25`, colección `equipos`.
+Tabla `equipos` (migración `002_catalogos.js`).
 
-| Campo | Tipo / reglas |
-|---|---|
-| `nombre` | String, required, trim |
-| `marca` | String, default `''`, trim |
-| `consecutivo` | Number, required |
-| `codigo_inventario` | String, required:false, default null, **unique, sparse**, trim |
-| `codigo_barras` | String, default `''`, trim |
-| `descripcion` | String, default `''` |
-| `estado` | enum `['activo','inactivo','mantenimiento']`, default `'activo'` |
-| `fecha_creacion`/`fecha_actualizacion` | Date, default `Date.now` |
+| Columna | Tipo | Detalle |
+|---|---|---|
+| `id`, `created_at`, `updated_at`, `deleted_at` | — | columnas universales |
+| `nombre` | text | |
+| `marca` | text | |
+| `consecutivo` | text | numeración dentro del mismo modelo |
+| `codigo_inventario` | text | código institucional |
+| `codigo_barras` | text | lo que lee el escáner en préstamo y devolución |
+| `descripcion` | text | |
+| `estado` | text | CHECK: `activo`, `inactivo`, `mantenimiento` |
 
-Índices: `codigo_barras: 1`, `estado: 1`, + único-sparse implícito de `codigo_inventario`.
+`estado` describe la disponibilidad del equipo en el inventario, no si está prestado. Que un equipo esté fuera se deduce de `prestamo_equipos.estado_equipo = 'entregado'`, y la migración 017 impide con un índice único parcial que aparezca entregado en dos préstamos a la vez.
 
-**El enum de `estado` no incluye `prestado`/`dañado`/`de_baja`**, y **no existe campo de ubicación/salón asignado** — el equipo es catálogo puro; la ubicación es atributo de la transacción de préstamo (`ubicacion_prestamo` en `Prestamo`), no del equipo.
+El borrado es en blando y está protegido por `trg_block_soft_delete`: no se puede dar de baja un equipo con préstamos o novedades vivas. El camino para retirarlo de circulación es `estado = 'inactivo'`.
 
 ## 3. Diagrama de clases / dependencias
 

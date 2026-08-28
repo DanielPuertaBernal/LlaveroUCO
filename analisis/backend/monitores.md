@@ -6,19 +6,17 @@ Tabla de asignación/delegación: vincula a un estudiante (monitor) con un docen
 
 ## 2. Modelo de datos
 
-`src/features/monitores/monitor.schema.js:4-27`, colección `monitores`, `versionKey:false`, `timestamps:true`.
+Tabla `monitores` (migración `005_llaves_monitores.js`).
 
-| Campo | Detalle |
+| Columna | Detalle |
 |---|---|
-| `numero_documento_docente` | String, required, trim — docente titular |
-| `nombre_docente` | String, default `''` — desnormalizado, snapshot al registrar |
-| `numero_documento_monitor` | String, required, trim — estudiante delegado |
-| `nombre_monitor`, `id_carnet_monitor`, `facultad_monitor`, `correo_monitor` | desnormalizados |
-| `materia` | String, required, trim |
-| `aula`, `horario`, `dia` | String, default `''`, opcionales, libres |
-| `activo` | Boolean, default `true` — soft-delete flag |
+| `docente_comunidad_id` → `comunidad` | docente que delega |
+| `monitor_comunidad_id` → `comunidad` | persona que recibe la delegación |
+| `monitor_nombre`, `monitor_id_carnet`, `monitor_facultad`, `monitor_correo` | snapshots del monitor |
+| `programacion_id` → `programaciones` | acota la delegación a una clase concreta |
+| `activo` | bool, default `true` |
 
-Índices: `numero_documento_docente`, `numero_documento_monitor`, `id_carnet_monitor` (simples), + **`{docente, monitor, materia, dia, horario}` único** — **sin `partialFilterExpression` sobre `activo`** (ver riesgo).
+La delegación es por clase, no global: un monitor habilitado para una programación no puede reclamar la llave de otra. Los snapshots permiten que el histórico siga mostrando los datos del monitor aunque su ficha en `comunidad` cambie.
 
 ## 3. Diagrama de clases / dependencias
 

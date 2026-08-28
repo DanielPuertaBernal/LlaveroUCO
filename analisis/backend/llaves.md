@@ -4,44 +4,49 @@
 
 Gestiona el préstamo y devolución física de llaves de salones, disparado por lectura NFC de carnet (ESP32) o por acción manual de un auxiliar de oficina. Resuelve automáticamente si la persona que hace tap NFC debe **recibir** una llave (según su programación académica, reserva semestral, o asignación de monitor) o **devolver** una que ya tiene, y mantiene un historial paginado con estados de mora calculados por un scheduler externo (`notificaciones`).
 
-**Aclaración estructural**: la "arquitectura CQRS" descrita en el enunciado no existe como subcarpetas (`context/domain/workflows/read-model/write-model`) — es CQRS ligero por **convención de nombres de archivo**, todos planos dentro de `src/features/llaves/`: `llave.routes.js`, `llave.controller.js`, `llave.service.js` (fachada + DI), `llave.workflows.js` (casos de uso), `llave.context.js` (resolución NFC), `llave.domain.js` (funciones puras), `llave.read-model.js` (queries formateadas), `llave.write-model.js` (comandos de escritura), `llave.repository.js`, `llave.schema.js`. No hay clases de dominio, agregados ni value objects tipados.
+**Aclaración estructural**: la "arquitectura CQRS" descrita en el enunciado no existe como subcarpetas (`context/domain/workflows/read-model/write-model`) — es CQRS ligero por **convención de nombres de archivo**, todos planos dentro de `src/features/llaves/`: `llave.routes.js`, `llave.controller.js`, `llave.service.js` (fachada + DI), `llave.workflows.js` (casos de uso), `llave.context.js` (resolución NFC), `llave.domain.js` (funciones puras), `llave.read-model.js` (queries formateadas), `llave.write-model.js` (comandos de escritura) y `llave.repository.js`. No hay clases de dominio, agregados ni value objects tipados.
 
 ## 2. Modelo de datos
 
-`Llave` — `src/features/llaves/llave.schema.js:4-47`, colección `registros_llaves`. El schema modela el **préstamo/evento**, no una entidad "llave física" con inventario propio.
+Tabla `registros_llaves` (migración `005_llaves_monitores.js`, ampliada por la 009 y la 022). Un registro cubre **el préstamo y su devolución en la misma fila**: no hay tabla de devoluciones para llaves, a diferencia de equipos.
 
-| Campo | Tipo | Notas |
-|---|---|---|
-| `numero_documento` | String, required, index | docente titular |
-| `docente`, `dia`, `horario`, `aula`, `facultad`, `materia` | String | contexto de la clase |
-| `fecha_hora_entrega` | Date, index | |
-| `fecha_hora_devolucion` | Date | null hasta devolución |
-| `duracion`, `tiempo_retraso`, `tiempo_retraso_devolucion` | String | |
-| `se_reclamo_a_tiempo`, `retraso_entrega` | Boolean | |
-| `tipo_entrega`/`tipo_devolucion` | enum `['manual','carnet','']` | |
-| `origen_registro` | enum `['individual','programacion','reserva_semestral','']` | |
-| `ubicacion_prestamo`/`ubicacion_devolucion` | String | |
-| `quien_reclama` | enum `['docente','monitor','otra_persona','']` | |
-| `quien_entrega` | enum `['docente','monitor','']` | |
-| `numero_documento_reclama/entrega`, `nombre_reclama/entrega` | String | |
-| **`estado`** | enum `['en_prestamo','en_mora','demora_entrega','entregado']`, default `'en_prestamo'`, index | **máquina de estados** |
-| `dia_entrega` | Date, index | fecha sin hora, solo para el índice único |
+### Identificación y contexto
 
-Índices: `numero_documento`, `fecha_hora_entrega`, `estado`, `dia_entrega` (simples) + **`{numero_documento, aula, dia_entrega}` único + sparse** (líneas 50-53), comentado como "previene entregar la misma llave dos veces el mismo día" — **pero ver §5, no cubre todos los flujos**.
+| Columna | Detalle |
+|---|---|
+| `comunidad_id` → `comunidad` | persona del préstamo; `docente_nombre` es el snapshot del nombre |
+| `programacion_id` → `programaciones` | clase que originó la entrega, si vino de programación |
+| `salon_id` → `salones` | `aula` es el snapshot del nombre |
+| `dia`, `horario`, `facultad`, `materia` | snapshots de texto al momento del registro |
+| `origen_registro` | CHECK: `individual`, `programacion`, `reserva_semestral`, `''` |
 
-### Máquina de estados
+### Tiempos y estado
 
-```mermaid
-stateDiagram-v2
-    [*] --> en_prestamo : creación (NFC/manual)
-    en_prestamo --> en_mora : notificacion.service.js (scheduler externo)
-    en_mora --> demora_entrega : notificacion.service.js (recordatorios agotados)
-    en_prestamo --> entregado : devolución (dentro de llaves)
-    en_mora --> entregado : devolución (dentro de llaves)
-    demora_entrega --> entregado : devolución (dentro de llaves)
-```
+| Columna | Detalle |
+|---|---|
+| `fecha_hora_entrega` / `fecha_hora_devolucion` | timestamptz |
+| `dia_entrega` | `date` — día calendario, para agrupar sin depender de la hora |
+| `duracion_minutos`, `tiempo_retraso_minutos`, `tiempo_retraso_devolucion_minutos` | enteros; el formato "2h 15min" se arma al serializar |
+| `se_reclamo_a_tiempo`, `retraso_entrega` | bool |
+| `estado` | CHECK: `en_prestamo`, `en_mora`, `demora_entrega`, `entregado` |
 
-Sin transición hacia atrás ni estado `perdida`/`en_reparacion`/`disponible`. Cada préstamo es un documento nuevo — no hay "re-préstamo" del mismo registro. Comentario explícito en `llave.domain.js:333-335`: *"Los estados (en_mora, demora_entrega) son escritos por el scheduler según la configuración del admin; ya no se calculan con un hardcode visual."*
+`en_mora` y `demora_entrega` los escribe el scheduler de notificaciones según la configuración del admin, no se calculan al vuelo.
+
+### Quién reclama y quién entrega
+
+`quien_reclama` (CHECK: `docente`, `monitor`, `otra_persona`, `''`) con `reclama_comunidad_id` y `nombre_reclama`; `quien_entrega` (CHECK: `docente`, `monitor`, `''`) con `entrega_comunidad_id` y `nombre_entrega`. `tipo_entrega`/`tipo_devolucion` distinguen `manual` de `carnet` — y la devolución admite además `automatica`.
+
+### Trazabilidad
+
+| Columna | Detalle |
+|---|---|
+| `gestionado_por_usuario_id` → `usuarios` | quién procesó **la entrega** |
+| `gestionado_por_devolucion_usuario_id` → `usuarios` | quién procesó **la devolución** (migración 022) |
+| `ubicacion_prestamo_id` / `ubicacion_devolucion_id` | snapshot histórico, congelado — ver abajo |
+
+Hasta la migración 022 había una sola columna de gestor y la devolución la sobrescribía, perdiendo quién entregó. Las dos columnas separan los momentos.
+
+Las dos de ubicación quedaron congeladas en `oficina_centro_servicios_docentes` desde la 009: todos los caminos de escritura caen a ese default y nada las calcula. La UI muestra el usuario gestor en su lugar. Ver [catálogos](./catalogos.md).
 
 ## 3. Diagrama de clases / dependencias
 
@@ -200,5 +205,5 @@ No existe módulo `prestamos` compartido con `llaves` — son dominios completam
 - **Filtro de `estado` en historial paginado se aplica en memoria**, no en la query Mongo — cuando hay paginación y filtro simultáneos, se trae todo el resultado sin paginar y se filtra/pagina en JS, ineficiente en historiales grandes.
 - **Auto-corrección con `try/catch` vacío**: side-effect de escritura dentro de una operación de lectura, con fallos silenciados sin logging.
 - **Sin cobertura de tests**: CodeGraph marcó "no covering tests found" en todos los símbolos principales del módulo (el más complejo del sistema).
-- **Acoplamiento por string, no por referencia**: `aula` es texto libre comparado contra `Salon.nombre_salon` en otros módulos, sin `ObjectId` — un rename de salón rompe silenciosamente el histórico.
+- **`aula` es snapshot, `salon_id` es la referencia**: la FK a `salones` existe y es la que se usa para resolver el bloque al validar permisos de portería. El texto `aula` se conserva a propósito para que el histórico muestre el nombre que tenía el salón al momento del préstamo; renombrarlo después no lo actualiza, y eso es deliberado.
 - **No hay entidad "llave física"/inventario**: el schema modela el préstamo, no un catálogo de llaves con ciclo de vida propio — si el negocio requiere rastrear la llave física entre préstamos, ese requerimiento no está cubierto.
