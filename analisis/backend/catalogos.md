@@ -1,104 +1,88 @@
-# Módulos catálogo: `bloques`, `tiposSilleteria`, `salones`, `ubicaciones`
+# Módulos catálogo: `bloques`, `tiposSilleteria`, `salones`, `ubicaciones`, `elementos-afectados`
 
-Se agrupan por ser CRUDs mayormente simples y estructuralmente análogos, salvo `ubicaciones`, que sí contiene lógica de dominio real (seeding idempotente + autorización de operaciones NFC) y se documenta con mayor detalle.
+Se agrupan por ser CRUDs estructuralmente análogos: tabla con columnas universales, borrado en blando y una guarda que impide borrar una fila todavía referenciada.
 
 ## 1. Propósito
 
-- **`bloques`**: catálogo de bloques/edificios de la universidad.
-- **`tiposSilleteria`**: catálogo de tipos de mobiliario de salones.
-- **`salones`**: catálogo de salones/aulas — el más "central" de los 4, referencia a `bloques` y es referenciado por `reservas`, `reservas_semestrales`, `notificaciones`.
-- **`ubicaciones`**: catálogo de ubicaciones operativas físicas (oficina, portería) donde ocurren operaciones NFC de identificación/préstamo/devolución — es la puerta de autorización real usada por `llaves`, `prestamos` y `nfc`.
+- **`bloques`**: bloques/edificios de la universidad.
+- **`tiposSilleteria`**: tipos de mobiliario de salones.
+- **`salones`**: salones/aulas — el más central; referencia a `bloques` y `tipos_silleteria`, y es referenciado por `reservas`, `reservas_semestrales`, `notificaciones`, `novedades`.
+- **`ubicaciones`** (`ubicaciones_operativas`): **histórico**. Fue la puerta de autorización del flujo NFC hasta la migración 009; hoy solo aporta el snapshot de ubicación en registros viejos. Ver §4.
+- **`elementos-afectados`**: qué puede dañarse en un aula (silla, ventana, tablero…). Alimenta `novedades`. Migración 023.
 
 ## 2. Modelos de datos
 
-### `Bloque` — `bloque.schema.js:4-17`, colección `bloques`
-`nombre_bloque` (String, required, unique, index), `fecha_creacion`/`fecha_actualizacion` (Date, default now).
+Todas las tablas comparten `id uuid`, `created_at`, `updated_at`, `deleted_at`.
 
-### `TipoSilleteria` — `tipo_silleteria.schema.js:4-17`, colección `tipos_silleteria`
-`nombre` (String, required, unique, index), `fecha_creacion`/`fecha_actualizacion`.
+| Tabla | Columnas propias |
+|---|---|
+| `bloques` | `nombre_bloque` |
+| `tipos_silleteria` | `nombre` |
+| `salones` | `nombre_salon`, `bloque_id` → `bloques`, `capacidad_estudiantes`, `tipo_silleteria_id` → `tipos_silleteria` |
+| `ubicaciones_operativas` | `clave` (lowercase), `nombre`, `descripcion`, `activa`, `permite_identificacion`, `permite_prestamo_llaves`, `permite_devolucion_llaves`, `permite_prestamo_equipos`, `creado_por`, `actualizado_por` |
+| `elementos_afectados` | `clave` (lowercase), `nombre`, `descripcion`, `activo`, `orden` |
 
-### `Salon` — `salon.schema.js:4-17`, colección `salones`
-`nombre_salon` (String, required, unique, index), `nombre_bloque` (String, required, index — FK por **nombre**, no ObjectId), `capacidad_estudiantes` (Number, required, min 1), `tipo_silleteria` (String, required — FK por nombre, **sin validar**), `fecha_creacion`/`fecha_actualizacion`.
+**Las relaciones son FK reales**, no strings denormalizados:
 
-### `Ubicacion` — `ubicacion.schema.js:4-67`, colección `ubicaciones_operativas`
-`clave` (String, required, unique, trim, lowercase — identificador funcional), `nombre`, `descripcion` (default `''`), `activa` (Boolean, default true, index), `permite_identificacion`/`permite_prestamo_llaves`/`permite_devolucion_llaves`/`permite_prestamo_equipos` (Boolean, default false — flags de permiso), `creado_por`/`actualizado_por` (auditoría de actor), `fecha_creacion`/`fecha_actualizacion`.
-
-Todas las relaciones entre estos 4 catálogos y el resto del sistema son **por nombre/clave en texto plano**, no por `ObjectId`/`ref`.
-
-## 3. Diagrama de clases / dependencias
-
-```mermaid
-classDiagram
-    class BloqueService
-    class TipoSilleteriaService
-    class SalonService {
-        +_validarBloqueRegistrado()
-        +aulasDeProgSinRegistrar()
-    }
-    class UbicacionService {
-        +asegurarIniciales() (seeding idempotente)
-        +validarOperacion(clave, operacion)
-    }
-    class BloqueRepository
-    class TipoSilleteriaRepository
-    class SalonRepository
-    class UbicacionRepository
-
-    BloqueService --> BloqueRepository
-    TipoSilleteriaService --> TipoSilleteriaRepository
-    SalonService --> SalonRepository
-    SalonService --> BloqueRepository : valida bloque exista
-    SalonService --> ProgramacionRepository : distinctAulas (reconciliación)
-    UbicacionService --> UbicacionRepository
-
-    ConfiguracionService ..> BloqueRepository : valida bloque exista
-    ReservaService ..> SalonSchema : bypass repository -- acceso directo
-    ReservasSemestralesService ..> SalonSchema : bypass repository -- acceso directo
-    LlaveService ..> UbicacionService : validarOperacion
-    PrestamoService ..> UbicacionService : validarOperacion
-    NfcService ..> UbicacionService : validarOperacion + obtenerPorClave
-    NotificacionService ..> SalonRepository : findByNombre (enriquecer con bloque)
+```
+salones_bloque_id_fkey           FK (bloque_id)          → bloques(id)          ON DELETE RESTRICT
+salones_tipo_silleteria_id_fkey  FK (tipo_silleteria_id) → tipos_silleteria(id) ON DELETE RESTRICT
 ```
 
-## 4. Flujo destacado: `ubicaciones.validarOperacion` (autorización NFC)
+La migración a Postgres reemplazó las referencias por nombre del modelo Mongo original. El API HTTP sigue aceptando y devolviendo nombres (`nombre_bloque`, `tipo_silleteria`) — los repositorios traducen.
 
-```mermaid
-sequenceDiagram
-    participant Modulo as llaves/prestamos/nfc
-    participant S as UbicacionService
-    participant Repo as UbicacionRepository
+## 3. Guarda de borrado en blando
 
-    Modulo->>S: validarOperacion(clave, operacion)
-    S->>S: mapea operación al campo de permiso (OPERACION_A_CAMPO)
-    S->>Repo: obtenerPorClave(clave)
-    alt ubicación no existe o campo permiso=false
-        S-->>Modulo: 400 badRequest
-    else permitido
-        S-->>Modulo: ok
-    end
+El borrado es lógico (`deleted_at`), así que una FK `ON DELETE RESTRICT` no alcanza: nada impediría marcar como borrado un bloque que todavía tiene salones. Por eso existe el trigger `trg_block_soft_delete`, que corre `block_soft_delete_with_active_children(tabla_hija, columna_fk)` antes de cada `UPDATE` que ponga `deleted_at`.
+
+Tablas protegidas:
+
+```
+bloques · comunidad · devoluciones · elementos_afectados · equipos · prestamos
+programacion_semestres · programaciones · registros_llaves · reservas · salones
+tipos_silleteria · ubicaciones_operativas · usuarios
 ```
 
-Seeding al arrancar: `server.js` invoca `asegurarIniciales()`, que hace upsert (`$setOnInsert`) de las ubicaciones default (oficina + portería superior) — memoizado con una promesa para evitar reseeds concurrentes, también invocado antes de cada operación de lectura/escritura del módulo como guard de idempotencia.
+La integridad referencial de estos catálogos la sostiene la base, no la capa de servicio.
+
+## 4. `ubicaciones_operativas`: histórico
+
+`ubicacion.service.js` todavía expone `validarOperacion(clave, operacion)`, que mapea una operación a su campo de permiso y rechaza si está en `false`. **Ningún módulo la llama.** La migración 009 la reemplazó por autorización de rol + bloque:
+
+```mermaid
+flowchart LR
+    A[Operación de llave o equipo] --> B{rol del usuario}
+    B -->|admin / auxiliar| C[acceso total]
+    B -->|porteria| D[portero_bloques: permiso por bloque del salón]
+    B -->|otro| E[403]
+```
+
+Consecuencias que siguen vivas en el código:
+
+- `validarOperacion` es **código muerto**.
+- Los campos `ubicacion_prestamo`/`ubicacion_devolucion` de `registros_llaves` y `prestamos` quedaron congelados en `oficina_centro_servicios_docentes`: todos los caminos de escritura caen a ese default. La UI ya no los muestra como punto de atención — usa el usuario gestor. Ver [llaves](./llaves.md).
+- La entrada `Porteria Superior` del catálogo tiene `permite_prestamo_llaves: false`, así que nunca aparecía como opción de entrega aunque se la eligiera.
+
+`asegurarIniciales()` sigue sembrando las dos ubicaciones default al arrancar, memoizado con una promesa para evitar reseeds concurrentes. Mismo patrón usa `elementoAfectado.service.js`.
 
 ## 5. Puntos de inflexión
 
-- **`salones` valida el bloque referenciado exista** (`_validarBloqueRegistrado`), pero **no valida el tipo de silletería** contra su propio catálogo — inconsistencia entre dos relaciones con la misma forma (string denormalizado + catálogo dedicado). `tiposSilleteria` es un catálogo puramente decorativo, sin consumidores reales fuera de su propio módulo.
-- **`salones` expone `aulasDeProgSinRegistrar()`**: cruza `programacion.distinctAulas()` contra salones registrados para detectar aulas usadas en programación académica sin registro de salón — utilidad de reconciliación de datos, no CRUD puro.
-- **`ubicaciones.clave` es mutable vía PATCH**: si se renombra la clave de "oficina" (usada como constante hardcodeada `UBICACIONES.OFICINA` en `shared/constants/nfc.constants` y como default en `prestamo.schema.js`), todas las búsquedas futuras `obtenerPorClave(UBICACIONES.OFICINA)` fallarían con 404, rompiendo identificación/préstamo/devolución NFC en producción sin que el código detecte la desincronización.
-- **Ninguno de los 4 catálogos valida referencias antes de `eliminar`** — riesgo sistémico de huérfanos.
-- **Sin cascada de renombrado**: renombrar un bloque o salón no propaga el cambio a las colecciones que copiaron el nombre (`reservas`, `reservas_semestrales`, `configuracion`, `programacion`) — quedan desincronizadas silenciosamente.
+- **`salones` expone `aulasDeProgSinRegistrar()`**: cruza las aulas usadas en programación académica contra los salones registrados para detectar faltantes. Reconciliación de datos, no CRUD.
+- **`clave` mutable vía PATCH** en `ubicaciones_operativas` y `elementos_afectados`: las claves se usan como constantes (`UBICACIONES.OFICINA`) y como filtro de API. Renombrarlas desincroniza sin que el código lo detecte.
+- **Catálogos con `orden`**: `elementos_afectados` ordena por `orden` y no alfabéticamente, para que lo más reportado quede arriba en el Select del formulario de novedades.
+- **Desactivar en vez de borrar**: cuando la guarda de soft-delete rechaza un borrado, el camino correcto es marcar `activo = false`. El histórico necesita seguir resolviendo el nombre.
 
-## 6. Dependencias externas/cruzadas
+## 6. Dependencias cruzadas
 
-- **`bloques`** lo usan: `salones` (`_validarBloqueRegistrado`), `configuracion` (`guardar` exige bloque existente). Referenciado como string libre sin validar por `reservas`, `reservas_semestrales`, `programacion`, `notificaciones`.
-- **`tiposSilleteria`**: sin consumidores reales fuera de su propio módulo — candidato a subutilizado.
-- **`salones`** lo usan: `notificaciones` (`findByNombre`), `reservas` y `reservas_semestrales` (**acceso directo al schema**, bypass de `SalonRepository`/`SalonService`).
-- **`ubicaciones`** lo usan: `llaves`, `prestamos`, `nfc` (`validarOperacion`/`obtenerPorClave`) — es la puerta de autorización real del flujo NFC completo.
+- **`bloques`**: lo usan `salones` (FK), `configuracion` (exige bloque existente) y `portero_bloques` (permisos de portería).
+- **`tiposSilleteria`**: solo `salones` (FK).
+- **`salones`**: lo usan `notificaciones`, `reservas`, `reservas_semestrales`, `novedades` (`salon_id`) y `llaves` (para resolver el bloque al validar permisos de portería).
+- **`ubicaciones`**: sin consumidores activos; solo lecturas de snapshot histórico.
+- **`elementos-afectados`**: `novedades` (`elemento_afectado_id`).
 
-## 7. Riesgos y observaciones de auditoría
+## 7. Riesgos y observaciones
 
-- **Patrón transversal en los 4 módulos**: ninguno valida referencias antes de eliminar (riesgo de huérfanos), y las relaciones son todas por nombre/clave en texto plano sin cascada de renombrado — riesgo de integridad referencial sistémico, no aislado a un módulo.
-- **Violación de vertical slicing**: `reserva.service.js` y `reservas_semestrales.service.js` importan el modelo `Salon` directamente en vez de usar `SalonRepository`/`SalonService`.
-- **`tiposSilleteria` no se valida contra `salones`**: cualquier texto se acepta como `tipo_silleteria` en un salón, sin garantía de integridad contra el catálogo dedicado.
-- **`ubicaciones.eliminar` no impide borrar ubicaciones "default"/críticas** ni verifica préstamos/llaves activos referenciándola — el único fallback es que `asegurarIniciales()` la recrearía en el próximo *restart* del servidor, dejando una ventana de fallo hasta entonces.
-- **Sin tests**: cero cobertura confirmada en los 4 módulos.
+- **`validarOperacion` es código muerto** y su presencia sugiere una autorización que ya no ocurre ahí.
+- **Sin cascada de renombrado en los campos denormalizados que quedan**: `novedades.salon` y los snapshots de nombre en `prestamo_equipos` copian el texto al momento del registro; renombrar el original no los actualiza. Es deliberado en los snapshots de préstamo, accidental en `novedades.salon`.
+- **`tiposSilleteria` sigue siendo un catálogo de bajo uso**: solo lo consume `salones`.
+- **Sin tests**: cero cobertura en los cinco módulos.

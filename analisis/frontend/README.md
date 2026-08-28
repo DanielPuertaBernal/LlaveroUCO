@@ -110,7 +110,7 @@ graph TD
 
 ## Hallazgos transversales de auditoría
 
-- **Código huérfano/legacy confirmado**: `src/features/llaves/LlavesPage.jsx` y `NotificacionesTab.jsx` (no enrutados; `llavesApi.js` sigue vivo y muy reutilizado), y `src/features/configuracion/ConfiguracionPage.jsx` (reemplazado por `notificaciones/tabs/ConfiguracionTab.jsx`; `/configuracion` redirige en `src/App.jsx:49`). `src/features/gestion-salones/GestionSalonesPage.jsx` es un wrapper de 5 líneas sobre `features/reservas`.
+- **Código huérfano/legacy confirmado**: `src/features/llaves/LlavesPage.jsxxx` y `NotificacionesTab.jsx` (no enrutados; `llavesApi.js` sigue vivo y muy reutilizado), y `src/features/configuracion/ConfiguracionPage.jsxxx` (reemplazado por `notificaciones/tabs/ConfiguracionTab.jsx`; `/configuracion` redirige en `src/App.jsxxx:49`). `salones/GestionSalonesPage.js -> src/features/gestion-salones/GestionSalonesPage.jsx-salones/GestionSalonesPage.jsx` es un wrapper de 5 líneas sobre `features/reservas`.
 - **Lógica duplicada entre features**: búsqueda de persona por documento/carnet/NFC repetida casi idéntica en `PrestamosPage.jsx`, `MonitoresPage.jsx`, `ReservasPage.jsx` y `ReservasSemestralesPage.jsx`; regla de "equipo en préstamo" duplicada entre `EquiposPage.jsx` y `PrestamosPage.jsx`.
 - **Endpoints/hooks sin consumidor**: acciones `aprobar`/`rechazar` de reservas individuales y cuatro hooks de `reservasSemestralesApi` exportados pero no usados en ningún componente.
 - **Inconsistencia de patrones de UI**: coexisten tres mecanismos de notificación al usuario (SweetAlert2 directo, wrapper `showSuccess`/`showError`, y `toast` de sonner) sin un estándar único.

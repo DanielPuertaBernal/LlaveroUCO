@@ -60,7 +60,7 @@ classDiagram
     PrestamoService --> PrestamoRepository --> PrestamoSchema
     PrestamoService --> DevolucionRepository --> DevolucionSchema
     PrestamoService --> EquipoRepository : findByIds
-    PrestamoService --> UbicacionService : validarOperacion
+    PrestamoService --> PorterosService : tienePermiso (recepción de equipos)
     PrestamoController --> NovedadService : registrar (require dinámico, si viene novedad en body)
 ```
 
@@ -78,7 +78,7 @@ sequenceDiagram
 
     C->>S: crear({docente_codigo_nfc, equipos[], ubicacion})
     S->>S: valida equipos no vacío
-    S->>S: ubicacionService.validarOperacion (préstamo de equipos)
+    S->>S: verificarPermiso por rol — portería NO puede prestar equipos, solo recibirlos
     S->>DB: session.startTransaction()
     S->>EquipoRepo: findByIds (existencia + estado='activo')
     S->>Repo: findEquiposPrestados (¿ya entregados en otro préstamo activo?)
@@ -127,7 +127,7 @@ flowchart TD
 
 ## 6. Dependencias externas/cruzadas
 
-**Usa**: `equipos/equipo.repository.js` (`findByIds`), `ubicaciones/ubicacion.service.js` (`validarOperacion`), `shared/constants/nfc.constants.js`, `novedades/novedad.service.js` (`registrar`, require dinámico dentro del método).
+**Usa**: `equipos/equipo.repository.js` (`findByIds`), `porteros/porteros.service.js` (`tienePermiso`), `shared/constants/nfc.constants.js`, `novedades/novedad.service.js` (`registrar`, require dinámico dentro del método).
 
 **Lo usan**: solo `src/app.js` monta las rutas en `/api/prestamos` — es un slice terminal sin consumidores internos. Confirma que `llaves` y `prestamos` no comparten código.
 

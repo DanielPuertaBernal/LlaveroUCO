@@ -6,12 +6,12 @@ Gestiona el inicio de sesión, la persistencia de la sesión (JWT + refresh toke
 
 ## 2. Componentes principales
 
-- **`LoginPage`** (`src/features/auth/LoginPage.jsx:17`): formulario de login (usuario/contraseña) con `react-hook-form` + `zod`. Si ya hay sesión activa, redirige a `/programacion` (`src/features/auth/LoginPage.jsx:23-27`).
+- **`LoginPage`** (`src/features/auth/LoginPage.jsxxx:17`): formulario de login (usuario/contraseña) con `react-hook-form` + `zod`. Si ya hay sesión activa, redirige a `/programacion` (`src/features/auth/LoginPage.jsxxx:23-27`).
 - **`authStore`** (`src/features/auth/authStore.js:39`): store `zustand` con middleware `persist` (localStorage, key `auth-storage-v2`). Solo persiste `refreshToken` (`partialize`, línea 100-102); `token` y `usuario` se recalculan en memoria en cada carga vía `restoreSession`.
 - **`authApi`** (`src/features/auth/authApi.js:3`): wrapper de endpoints de autenticación sobre `apiClient`.
-- **`ProtectedRoute`** (`src/shared/components/ProtectedRoute.jsx:9`): guarda de rutas; controla hidratación, redirección a `/login` y filtrado por rol (`roles` prop).
+- **`ProtectedRoute`** (`src/shared/components/ProtectedRoute.jsxxx:9`): guarda de rutas; controla hidratación, redirección a `/login` y filtrado por rol (`roles` prop).
 - **`useAuth`** (`src/shared/hooks/useAuth.js:3`): hook wrapper sobre `useAuthStore` que expone `usuario, token, isAuthenticated, login, logout`. **Sin consumidores en el repo** (ver §8).
-- **`Layout`** (`src/shared/components/Layout.jsx:8`): no es parte de la feature pero orquesta el logout (llama `authApi.logout` y `authStore.logout`).
+- **`Layout`** (`src/shared/components/Layout.jsxxx:8`): no es parte de la feature pero orquesta el logout (llama `authApi.logout` y `authStore.logout`).
 
 ## 3. Diagrama de dependencias
 

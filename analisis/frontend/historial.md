@@ -2,13 +2,13 @@
 
 ## 1. Propósito
 
-Página en `/historial` (`src/App.jsx:40`, etiquetada en el sidebar como "Entrega de Llaves") que lista el historial completo de préstamos de llave por fecha/estado, permite ver el detalle de cada registro, registrar devoluciones pendientes directamente desde la tabla y exportar a Excel en el cliente.
+Página en `/historial` (`src/App.jsxxx:40`, etiquetada en el sidebar como "Entrega de Llaves") que lista el historial completo de préstamos de llave por fecha/estado, permite ver el detalle de cada registro, registrar devoluciones pendientes directamente desde la tabla y exportar a Excel en el cliente.
 
 ## 2. Componentes principales
 
 | Símbolo | Archivo | Responsabilidad |
 |---|---|---|
-| `HistorialPage` | `src/features/historial/HistorialPage.jsx:14` | Única exportación del módulo. Filtros (fecha/estado), tabla, modal de detalle, devolución inline y exportación a `.xlsx`. |
+| `HistorialPage` | `src/features/historial/HistorialPage.jsxxx:14` | Única exportación del módulo. Filtros (fecha/estado), tabla, modal de detalle, devolución inline y exportación a `.xlsx`. |
 | `abrirDetalles` | `HistorialPage.jsx:30` | Abre un `Swal.fire` con el detalle completo del registro (reclamo, contacto, duración, retraso). |
 | `handleDevolucion` | `HistorialPage.jsx:60` | Confirma y ejecuta la devolución de un registro `en_prestamo`/`en_mora`/`demora_entrega` directamente desde la tabla de historial. |
 | `handleExport` | `HistorialPage.jsx:127` | Exporta los registros visibles a Excel usando `xlsx` (import dinámico), sin llamar al backend. |

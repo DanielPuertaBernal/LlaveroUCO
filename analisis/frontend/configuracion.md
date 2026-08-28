@@ -6,7 +6,7 @@ Módulo destinado a administrar la política de notificaciones automáticas de d
 
 ## 2. Componentes principales
 
-- **`ConfiguracionPage`** (`src/features/configuracion/ConfiguracionPage.jsx:18`): página standalone (fuera del sistema de tabs de notificaciones) con formulario de edición inline (`editando` = nombre de bloque o `'__nuevo__'`), lista de tarjetas de configuraciones existentes y un bloque informativo de "valores por defecto" **de solo lectura** (sin edición — a diferencia de su contraparte activa).
+- **`ConfiguracionPage`** (`src/features/configuracion/ConfiguracionPage.jsxxx:18`): página standalone (fuera del sistema de tabs de notificaciones) con formulario de edición inline (`editando` = nombre de bloque o `'__nuevo__'`), lista de tarjetas de configuraciones existentes y un bloque informativo de "valores por defecto" **de solo lectura** (sin edición — a diferencia de su contraparte activa).
 
 ## 3. Diagrama de dependencias
 
@@ -98,9 +98,9 @@ sequenceDiagram
 
 **`ConfiguracionPage.jsx` no está enrutado activamente.** Verificación:
 
-- `src/App.jsx` no importa `ConfiguracionPage` en ningún punto (los imports en las líneas 4-19 no incluyen `features/configuracion/ConfiguracionPage`).
-- La única ruta relacionada, `/configuracion` (`src/App.jsx:49`), es un `<Navigate to="/notificaciones" replace />` explícito — redirige incondicionalmente, nunca renderiza `ConfiguracionPage`.
-- La funcionalidad real y activa de configuración de notificaciones vive en `src/features/notificaciones/tabs/ConfiguracionTab.jsx:203`, montada como pestaña dentro de `NotificacionesPage` (`src/features/notificaciones/NotificacionesPage.jsx:56`).
+- `src/App.jsxxx` no importa `ConfiguracionPage` en ningún punto (los imports en las líneas 4-19 no incluyen `features/configuracion/ConfiguracionPage`).
+- La única ruta relacionada, `/configuracion` (`src/App.jsxxx:49`), es un `<Navigate to="/notificaciones" replace />` explícito — redirige incondicionalmente, nunca renderiza `ConfiguracionPage`.
+- La funcionalidad real y activa de configuración de notificaciones vive en `src/features/notificaciones/tabs/ConfiguracionTab.jsx:203`, montada como pestaña dentro de `NotificacionesPage` (`src/features/notificaciones/NotificacionesPage.jsxxx:56`).
 
 **Comparación de alcance — ¿duplicado o versión anterior?** `ConfiguracionTab.jsx` es una **superversión** de `ConfiguracionPage.jsx`, no un duplicado exacto:
 

@@ -1,13 +1,25 @@
-# Documentación técnica — AulaSync
+# Documentación técnica — LlaveroUCO
 
-Auditoría y trazado de flujos/dependencias del sistema. Nota: este documento describe el estado del proyecto en una etapa previa (arquitectura MongoDB + ESP32/NFC). Desde entonces el backend fue migrado por completo a PostgreSQL, se agregó login institucional Office 365 con el rol "portería", y el firmware ESP32/NFC fue retirado en favor de lectores RFID USB tipo teclado emulado — se conserva como referencia histórica de la auditoría original.
+Trazado de flujos y dependencias del sistema: qué hace cada módulo, con qué tablas trabaja y dónde vive la lógica de negocio que no se deduce leyendo el código de a un archivo.
 
-- [Arquitectura general](./arquitectura-general.md) — cómo se conectaban los repos, flujo NFC end-to-end (histórico)
+**Stack actual**: PostgreSQL (Knex, sin ORM), Express, React + Vite. Autenticación con Office 365 y rol `porteria`. Los lectores son RFID USB tipo teclado emulado, conectados al navegador de cada operador.
+
+- [Arquitectura general](./arquitectura-general.md) — repos, capas y flujo de identificación end-to-end
 - [Backend — índice de módulos](./backend/README.md)
 - [Frontend — índice de features](./frontend/README.md)
-- [Firmware Lectores](./lectores/firmware.md) — histórico, el firmware ESP32 fue retirado del proyecto
-- [Deuda técnica e inconsistencias](./deuda-tecnica.md) — consolidado de riesgos y hallazgos de la auditoría
-- [Testing y TDD](./testing-tdd.md) — análisis de adopción de tests automatizados (Vitest/supertest/RTL) y secuencia recomendada
-- [Estrategia de migración de stack](./estrategia-migracion/README.md) — plan original de migración a PostgreSQL (ya ejecutado)
+- [Deuda técnica e inconsistencias](./deuda-tecnica.md) — riesgos abiertos
+- [Testing y TDD](./testing-tdd.md) — adopción de tests automatizados y secuencia recomendada
 
-Cada módulo/feature tiene su propio archivo con: propósito, modelo de datos, diagramas de dependencias y flujos (Mermaid), puntos de inflexión (lógica de negocio no obvia) y observaciones de auditoría.
+Cada módulo/feature tiene su propio archivo con: propósito, modelo de datos, diagramas de dependencias y flujos (Mermaid), puntos de inflexión (lógica de negocio no obvia) y observaciones.
+
+## Historia del stack
+
+Dos migraciones grandes ya ejecutadas explican por qué hay código con nombres que no cuadran con lo que hacen:
+
+- **MongoDB → PostgreSQL**. Los modelos Mongoose (`*.schema.js`) fueron reemplazados por repositorios sobre Knex. Varias columnas conservan el nombre del campo Mongo original para no romper el contrato HTTP, y algunos repositorios traducen entre el payload de negocio y las columnas reales (`novedad.repository.js`, `llave.repository.js`).
+- **ESP32/NFC → lectores RFID USB**. El gateway serie sobre Socket.IO fue retirado; cada operador lee su propia tarjeta en el navegador. La migración 009 acompañó ese cambio moviendo la autorización de portería de `ubicaciones_operativas` a permisos por bloque (`portero_bloques`).
+
+El material de la auditoría original y el plan de migración se conservan en:
+
+- [Estrategia de migración de stack](./estrategia-migracion/README.md) — histórico, ya ejecutado
+- [Firmware Lectores](./lectores/firmware.md) — histórico, el firmware ESP32 fue retirado

@@ -6,8 +6,8 @@ Gestiona el ciclo completo de préstamo y devolución de equipos de inventario a
 
 ## 2. Componentes principales
 
-- **`PrestamosPage`** (`src/features/prestamos/PrestamosPage.jsx:44`) — página principal, ~880 líneas. Contiene: formulario de registro de préstamo (carrito + búsqueda de persona), tabs Activos/Historial con `DataTable`, y panel de devolución parcial por escaneo con cola de novedades por equipo. Es el componente más grande y con más estado local del subsistema auditado (más de 15 `useState`).
-- **`PrestamosDetallePanel`** (`src/features/prestamos/PrestamosDetallePanel.jsx:31`) — panel de solo-lectura (modal vía `createPortal`) que muestra el detalle de un préstamo: solicitante, responsable, ubicación, auxiliar, tiempos transcurridos por artículo, y botón "Gestionar devolución" que delega el flujo real de vuelta a `PrestamosPage`.
+- **`PrestamosPage`** (`src/features/prestamos/PrestamosPage.jsxxx:44`) — página principal, ~880 líneas. Contiene: formulario de registro de préstamo (carrito + búsqueda de persona), tabs Activos/Historial con `DataTable`, y panel de devolución parcial por escaneo con cola de novedades por equipo. Es el componente más grande y con más estado local del subsistema auditado (más de 15 `useState`).
+- **`PrestamosDetallePanel`** (`src/features/prestamos/PrestamosDetallePanel.jsxxx:31`) — panel de solo-lectura (modal vía `createPortal`) que muestra el detalle de un préstamo: solicitante, responsable, ubicación, auxiliar, tiempos transcurridos por artículo, y botón "Gestionar devolución" que delega el flujo real de vuelta a `PrestamosPage`.
 
 ## 3. Diagrama de dependencias
 

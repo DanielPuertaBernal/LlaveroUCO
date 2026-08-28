@@ -6,7 +6,7 @@ Gestiona el inventario de equipos audiovisuales/tecnológicos de la universidad:
 
 ## 2. Componentes principales
 
-- **`EquiposPage`** (`src/features/equipos/EquiposPage.jsx:45`) — página única del dominio. Combina tabla (`DataTable`), formulario en `Sheet` (crear/editar) con `react-hook-form`, y acciones de exportación de código de barras vía `jsbarcode` + `jspdf`. No hay paneles hijos adicionales; toda la lógica vive en este único componente de ~365 líneas.
+- **`EquiposPage`** (`src/features/equipos/EquiposPage.jsxxx:45`) — página única del dominio. Combina tabla (`DataTable`), formulario en `Sheet` (crear/editar) con `react-hook-form`, y acciones de exportación de código de barras vía `jsbarcode` + `jspdf`. No hay paneles hijos adicionales; toda la lógica vive en este único componente de ~365 líneas.
 
 ## 3. Diagrama de dependencias
 
@@ -129,7 +129,7 @@ sequenceDiagram
   - `EquiposPage` importa `usePrestamosAbiertos` de `prestamos/prestamosApi.js` para pintar el estado "en préstamo" (`EquiposPage.jsx:13`).
   - `PrestamosPage` importa `equiposApi` (objeto plano, no el hook) para `buscarBarcode` y `buscarPorTexto` al armar el carrito de préstamo (`PrestamosPage.jsx:6,225,372`).
   - `useCrearPrestamo`/`useRegistrarDevolucion` (en `prestamosApi.js`) invalidan explícitamente `['equipos']` al éxito — asegurando que `EquiposPage` se refresque tras un préstamo/devolución.
-- **DataTable compartido** (`src/shared/components/DataTable.jsx:29`): usado igual que en `prestamos`, `comunidad`, `historial`, `llaves` (13 usos totales según CodeGraph). `EquiposPage` lo usa con `searchable` y `exportable` (exporta a `.xlsx` vía `xlsx` importado dinámicamente dentro del propio `DataTable`).
+- **DataTable compartido** (`src/shared/components/DataTable.jsxxx:29`): usado igual que en `prestamos`, `comunidad`, `historial`, `llaves` (13 usos totales según CodeGraph). `EquiposPage` lo usa con `searchable` y `exportable` (exporta a `.xlsx` vía `xlsx` importado dinámicamente dentro del propio `DataTable`).
 - **Sheet compartido** (`shared/components/ui/Sheet.jsx`) para el formulario lateral de alta/edición — mismo patrón que otras páginas de gestión (ver posible replicar en `llaves`, no verificado en este alcance).
 
 ## 8. Riesgos u observaciones de auditoría

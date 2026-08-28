@@ -1,8 +1,16 @@
 # NFC — Lector compartido y canal WebSocket
 
+> **Módulo retirado.** El feature `nfc` (gateway serie sobre Socket.IO con
+> lectores ESP32 compartidos) ya no existe en el código: no hay
+> `src/features/nfc/` ni `src/shared/websocket/nfc.gateway.js`. Los lectores
+> actuales son RFID USB tipo teclado emulado y cada operador lee su tarjeta en
+> su propio navegador; la identificación por carnet vive ahora dentro de
+> `llaves` (`procesarLecturaNFC`) y de la búsqueda de persona en `prestamos`.
+> Este documento se conserva como referencia histórica.
+
 ## 1. Propósito
 
-Consola operativa del lector NFC/ESP32 compartido por el campus: muestra el estado del canal WebSocket, el log de lecturas crudas y reacciona a los resultados que el backend empuja tras procesar una lectura (préstamo, devolución, reclamo anticipado, error). No inicia el lector ni gestiona colas por sí misma: es la única página *montada por ruta* en `/nfc` (`src/App.jsx:41`), pero la lógica de negociación de intención/cola vive en `useNFCSocket.js` y es reutilizada por otras páginas (`LlavesPage` huérfana, `MonitoresPage`, `ReservasPage`).
+Consola operativa del lector NFC/ESP32 compartido por el campus: muestra el estado del canal WebSocket, el log de lecturas crudas y reacciona a los resultados que el backend empuja tras procesar una lectura (préstamo, devolución, reclamo anticipado, error). No inicia el lector ni gestiona colas por sí misma: es la única página *montada por ruta* en `/nfc` (`src/App.jsxxx:41`), pero la lógica de negociación de intención/cola vive en `useNFCSocket.js` y es reutilizada por otras páginas (`LlavesPage` huérfana, `MonitoresPage`, `ReservasPage`).
 
 ## 2. Componentes principales
 

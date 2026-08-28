@@ -6,7 +6,7 @@ Permite a cualquier usuario autenticado (cualquier rol) ver y editar sus datos p
 
 ## 2. Componentes principales
 
-- **`PerfilPage`** (`src/features/perfil/PerfilPage.jsx:28`): página única con dos formularios independientes (`react-hook-form`) en un layout de dos columnas: "Editar información" y "Cambiar contraseña". No tiene subcomponentes propios.
+- **`PerfilPage`** (`src/features/perfil/PerfilPage.jsxxx:28`): página única con dos formularios independientes (`react-hook-form`) en un layout de dos columnas: "Editar información" y "Cambiar contraseña". No tiene subcomponentes propios.
 - **`passwordChangeSchema`** (`PerfilPage.jsx:13-26`): esquema `zod` con reglas de complejidad (min. 8 caracteres, mayúscula, minúscula, número, carácter especial) y `refine` para validar que `passwordNueva === confirmar`.
 - El formulario de "Editar información" **no tiene esquema de validación** (`useForm({ defaultValues: {...} })` sin `resolver`, línea 31-33) — envía lo que sea que el usuario escriba.
 

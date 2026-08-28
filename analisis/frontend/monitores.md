@@ -6,7 +6,7 @@ Wizard de 4 pasos para registrar auxiliares/monitores académicos asociados a un
 
 ## 2. Componentes principales
 
-- **`MonitoresPage`** (`src/features/monitores/MonitoresPage.jsx:16`) — único componente de página, contiene todo el wizard y la lista de monitores del docente activo. ~410+ líneas.
+- **`MonitoresPage`** (`src/features/monitores/MonitoresPage.jsxxx:16`) — único componente de página, contiene todo el wizard y la lista de monitores del docente activo. ~410+ líneas.
 - **`StepIndicator`** (línea 388, interno al mismo archivo) — indicador visual de los 4 pasos (Docente → Materia → Monitor → Confirmar).
 - **`NfcIndicator`** (línea 358, interno) — feedback visual del estado del lector NFC (buscando / en cola / listo / conectando).
 - **`PersonaCard`** (línea 408, interno) — tarjeta de persona (docente/monitor) en variante compacta y completa.

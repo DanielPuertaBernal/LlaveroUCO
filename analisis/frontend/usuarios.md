@@ -6,7 +6,7 @@ Administra las cuentas de acceso al sistema AulaSync (usuario/contraseña, rol, 
 
 ## 2. Componentes principales
 
-- **`UsuariosPage`** (`src/features/usuarios/UsuariosPage.jsx:161`): página única con `DataTable` de usuarios y `Sheet` lateral de creación con formulario validado por `react-hook-form` + `zod` (`crearUsuarioSchema`, línea 24). Incluye búsqueda y auto-vinculación opcional a una persona de Comunidad antes de crear el usuario.
+- **`UsuariosPage`** (`src/features/usuarios/UsuariosPage.jsxxx:161`): página única con `DataTable` de usuarios y `Sheet` lateral de creación con formulario validado por `react-hook-form` + `zod` (`crearUsuarioSchema`, línea 24). Incluye búsqueda y auto-vinculación opcional a una persona de Comunidad antes de crear el usuario.
 - **`ComunidadCell`** (línea 53): celda de tabla con estado local de 3 modos (mostrar vinculado / mostrar botón "Vincular" / modo edición con input) — permite vincular o desvincular un usuario existente a una persona de Comunidad sin abrir el `Sheet` de creación.
 - **`EstadoToggle`** (línea 39): celda clicable que alterna `activo` de un usuario mediante `useCambiarEstadoUsuario.mutate` directo (sin confirmación previa).
 
@@ -115,7 +115,7 @@ sequenceDiagram
 
 ## 6. Puntos de inflexión
 
-- **Guard de ruta ADMIN-only**: `/usuarios` está dentro de `<Route element={<ProtectedRoute roles={[ROLES.ADMIN]} />}>` (`src/App.jsx:53`). Igual que `comunidad`, es control a nivel de ruta (redirección a `/programacion` si el rol no coincide), no solo de UI.
+- **Guard de ruta ADMIN-only**: `/usuarios` está dentro de `<Route element={<ProtectedRoute roles={[ROLES.ADMIN]} />}>` (`src/App.jsxxx:53`). Igual que `comunidad`, es control a nivel de ruta (redirección a `/programacion` si el rol no coincide), no solo de UI.
 - **Validación robusta con zod** (`crearUsuarioSchema`, líneas 24-37): único feature de los 5 auditados que usa react-hook-form + zod en vez de validación manual. Password exige mayúscula, minúscula, número y carácter especial además de 8 caracteres mínimo.
 - **Manejo de error diferenciado por status HTTP** (`onCrear`, líneas 205-223): distingue 409 (usuario/correo duplicado), 400 (datos inválidos), ausencia de `err.response` (sin conexión) y fallback genérico — el más granular de los 5 features auditados.
 - **`EstadoToggle` no pide confirmación** antes de activar/desactivar un usuario (a diferencia de "eliminar persona" en Comunidad, que sí usa `showConfirm`) — un clic accidental desactiva inmediatamente la cuenta.
@@ -125,7 +125,7 @@ sequenceDiagram
 
 - **`comunidadApi.buscarPorDocumento`**: llamada directa (no `useQuery`) para autocompletar datos de persona al crear/vincular usuario — mismo patrón imperativo detectado en `comunidad.md` punto 8.
 - **`ROLES` de `shared/constants.js`**: usado solo para renderizar el badge de rol (`v === ROLES.ADMIN ? 'Admin' : 'Auxiliar'`, línea 136-138), no para lógica de acceso dentro del componente (el guard vive en `ProtectedRoute`).
-- **`ProtectedRoute roles={[ROLES.ADMIN]}`**: `src/App.jsx:53`.
+- **`ProtectedRoute roles={[ROLES.ADMIN]}`**: `src/App.jsxxx:53`.
 - **Consumido externamente**: `usuariosApi` es usado también por `PerfilPage.jsx` (edición de perfil propio y cambio de contraseña) — fuera del alcance de este documento pero relevante para el radio de impacto de cambios en `usuariosApi.js`.
 
 ## 8. Riesgos u observaciones de auditoría

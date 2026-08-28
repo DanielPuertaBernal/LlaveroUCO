@@ -2,67 +2,74 @@
 
 ## 1. Propósito
 
-Registra incidencias/reportes sobre recursos prestables (llaves o equipos): daño físico, mal funcionamiento, pérdida, demora en la entrega, u "otro". Actúa como bitácora de novedades tanto manuales (reportadas por un auxiliar al momento de la devolución) como automáticas (generadas por el motor de notificaciones cuando un préstamo entra en mora crítica). No gestiona salones como entidad propia — `salon` es un string libre de contexto.
+Registra incidencias sobre llaves, equipos o el aula misma: daño físico, mal funcionamiento, pérdida, demora en la entrega, u "otro". Actúa como bitácora tanto manual (reportada al momento de la devolución) como automática (generada por el motor de notificaciones cuando un préstamo entra en mora crítica).
 
 ## 2. Modelo de datos
 
-`src/features/novedades/novedad.schema.js:4-43`, colección `novedades`, `timestamps:true`, `versionKey:false`.
+Tabla `novedades` (migración `007_reservas_nfc_notificaciones_novedades.js`, modificada por la 010, 011, 016 y 023). El repositorio traduce entre el payload de negocio del API y las columnas reales, igual que `llave.repository.js`.
 
-| Campo | Detalle |
-|---|---|
-| `tipo_recurso` | enum `['llave','equipo']`, required, index |
-| `recurso_id` | ObjectId, default null — **sin `ref`**, no populate posible |
-| `prestamo_ref` | ObjectId, default null — referencia al préstamo origen, sin `ref` |
-| `reportado_por` | String, required, index — documento del usuario |
-| `reportado_por_nombre` | String, default `''` |
-| `salon` | String, default `''` — texto libre, no ref |
-| `categoria` | enum `['sin_novedad','daño_fisico','no_funciona','perdida','otro','demora_entrega']`, required |
-| `descripcion` | String, maxlength 500 |
-| `estado` | enum `['abierta','en_revision','resuelta','cerrada']`, default `'abierta'`, index |
-| `resolucion` | String, default `''` |
-| `fecha_reporte` | Date, default `Date.now`, index |
-| `fecha_resolucion` | Date, default null |
-| `notificacion_admin_enviada` | Boolean, default `false` — **campo muerto**, ver §7 |
+| Columna | Tipo | Detalle |
+|---|---|---|
+| `id`, `created_at`, `updated_at`, `deleted_at` | — | columnas universales; borrado en blando |
+| `llave_id` | uuid NULL | FK a `registros_llaves` |
+| `equipo_id` | uuid NULL | FK a `equipos` |
+| `prestamo_id` | uuid NULL | FK a `prestamos`; existe pero ningún flujo la puebla todavía |
+| `reportado_por` | text | documento de quien reporta |
+| `reportado_por_comunidad_id` | uuid NULL | FK resuelta desde `reportado_por` |
+| `reportado_por_nombre` | text | |
+| `salon`, `salon_id` | text / uuid NULL | texto libre + FK resuelta cuando el nombre coincide |
+| `categoria` | text | CHECK: `sin_novedad`, `daño_fisico`, `no_funciona`, `perdida`, `otro`, `demora_entrega` |
+| `elemento_afectado_id` | uuid NULL | FK a `elementos_afectados` (023) — qué se dañó |
+| `cantidad_afectada` | int | default 1, CHECK `> 0` — cuántas unidades |
+| `descripcion` | varchar(500) | |
+| `estado` | text | CHECK: `abierta`, `en_revision`, `resuelta` |
+| `resolucion` | text | |
+| `en_revision_por` / `en_revision_en` | text / timestamptz | quién y cuándo pasó a revisión |
+| `resuelto_por` | text | |
+| `fecha_reporte` / `fecha_resolucion` | timestamptz | |
+| `notificacion_admin_enviada` | bool | **campo muerto**, ver §6 |
 
-Índice compuesto: `{tipo_recurso, recurso_id}`.
+`CHECK ck_novedades_recurso_exclusivo: num_nonnulls(llave_id, equipo_id) <= 1`. La 011 lo relajó de `= 1` a `<= 1` para permitir la **novedad general**: un daño al aula sin préstamo ni equipo involucrado.
 
-## 3. Diagrama de clases / dependencias
+El API expone `tipo_recurso` (`llave` | `equipo` | `general`) y `recurso_id`, derivados en el `SELECT` desde cuál de las dos FK está poblada. Son campos calculados, no columnas.
+
+## 3. Diagrama de dependencias
 
 ```mermaid
 classDiagram
     class NovedadRoutes
     class NovedadController
     class NovedadService {
-        +registrar() +actualizarEstado() +obtener() +listar() +estadisticas()
+        +registrar() +actualizarEstado() +obtenerPorId() +listar() +estadisticas()
     }
     class NovedadRepository
-    class NovedadSchema
+    class ElementoAfectadoService
 
     NovedadRoutes --> NovedadController --> NovedadService
-    NovedadService --> NovedadRepository --> NovedadSchema
-    PrestamoController ..> NovedadService : registrar (al devolver equipo, si viene novedad en body)
-    LlaveController ..> NovedadService : registrar (al devolver llave, mismo patrón)
+    NovedadService --> NovedadRepository
+    NovedadRepository --> ElementoAfectadoService : resolverId (acepta id o clave)
+    PrestamoController ..> NovedadService : registrar (al devolver equipo con novedad en el body)
     NotificacionService ..> NovedadRepository : findByPrestamoRef (idempotencia)
     NotificacionService ..> NovedadService : registrar (novedad automática por demora)
 ```
 
 ## 4. Flujos principales
 
-### 4.1 Creación manual (post-devolución)
+### 4.1 Creación manual
 
 ```mermaid
 sequenceDiagram
-    participant Aux as Auxiliar
-    participant PC as prestamo/llave.controller
+    participant Op as Operador
+    participant PC as prestamo.controller
     participant NS as NovedadService
 
-    Aux->>PC: devolución con body.novedad.categoria
-    PC->>NS: registrar({tipo_recurso, recurso_id, prestamo_ref, reportado_por: req.user.sub o req.body})
-    note right of NS: reportado_por es spoofeable si viene en el body
+    Op->>PC: devolución con body.novedad.categoria
+    PC->>NS: registrar({tipo_recurso, recurso_id, categoria, descripcion})
+    note right of NS: reportado_por SIEMPRE sale de req.user,<br/>nunca del body
     NS-->>PC: novedad creada (estado=abierta)
 ```
 
-### 4.2 Generación automática por mora (desde `notificaciones`)
+### 4.2 Generación automática por mora
 
 ```mermaid
 sequenceDiagram
@@ -72,10 +79,10 @@ sequenceDiagram
     participant NovS as NovedadService
 
     Sched->>NotifS: verificarYEncolarNotificaciones
-    NotifS->>NotifS: préstamo llega a estado demora_entrega
+    NotifS->>NotifS: préstamo llega a demora_entrega
     NotifS->>NovRepo: findByPrestamoRef (evita duplicar)
     alt no existe aún
-        NotifS->>NovS: registrar(categoria='demora_entrega', estado='abierta')
+        NotifS->>NovS: registrar(categoria='demora_entrega')
     end
 ```
 
@@ -83,35 +90,27 @@ sequenceDiagram
 
 ```mermaid
 flowchart LR
-    A[PATCH /:id/estado] --> B{estado nuevo}
-    B --> C[cualquier transición aceptada -- SIN máquina de estados real]
-    C -->|resuelta o cerrada| D[fija fecha_resolucion = ahora]
+    A[PATCH /:id/estado] --> B{rango del nuevo estado}
+    B -->|menor al actual| C[400 — no se puede retroceder]
+    B -->|igual o mayor| D[resolución obligatoria]
+    D -->|en_revision| E[graba en_revision_por / en_revision_en]
+    D -->|resuelta| F[graba resuelto_por / fecha_resolucion]
 ```
 
 ## 5. Puntos de inflexión
 
-- **Quién puede reportar**: cualquier usuario `requireAuth` (sin restricción de rol). `reportado_por` puede sobrescribirse desde el body — **no se fuerza siempre al usuario autenticado**, es spoofeable.
-- **Cambio de estado solo admin, sin máquina de estados real**: cualquier transición entre los 4 estados es aceptada (incluida reabrir una `cerrada` o saltar directo de `abierta` a `cerrada`).
-- **Relación con `notificaciones` es unidireccional inversa**: `novedades` no notifica a nadie al crearse; es `notificaciones` quien **consume** `novedades`, creando novedades automáticas por demora con chequeo de idempotencia vía `prestamo_ref`.
-- **`recurso_id`/`prestamo_ref` sin `ref` de Mongoose ni validación de existencia** contra `llaves`/`equipos` según `tipo_recurso`.
-- **`salon` como texto libre** copiado del préstamo/registro — sin garantía de consistencia si el nombre del salón cambia.
+- **Estados monótonos**: `RANGO_ESTADO` (`abierta` 0 → `en_revision` 1 → `resuelta` 2) impide retroceder. Migración 016. La 010 había fusionado antes el estado `cerrada` con `resuelta`.
+- **Autoría no falsificable**: `reportado_por`/`reportado_por_nombre` se derivan de `req.user` en el controller, ignorando lo que venga en el body.
+- **Resolución obligatoria** en cualquier cambio de estado, incluido pasar a `en_revision`.
+- **Elemento afectado como catálogo, no enum**: la 023 introdujo `elementos_afectados` para que el "qué se dañó" sea agregable. Las estadísticas suman `cantidad_afectada`, no cuentan filas — tres sillas rotas son un reporte pero tres sillas. Ver [catálogos](./catalogos.md).
+- **Relación con `notificaciones` es inversa**: `novedades` no notifica a nadie al crearse; es `notificaciones` quien crea novedades automáticas por demora, con idempotencia vía `findByPrestamoRef`.
+- **`salon` como texto libre** copiado del contexto, con `salon_id` resuelto por nombre — sin garantía de consistencia si el salón se renombra.
 
-## 6. Dependencias externas/cruzadas
+## 6. Riesgos y observaciones
 
-**Usa**: `shared/utils/pagination.helper`, `shared/utils/logger`, `shared/errors/api.error`, `auth.middleware` (`requireAdmin`/`requireAuth`).
-
-**Lo usan**:
-- `prestamos/prestamo.controller.js` — al devolver equipo con `novedad.categoria` en el body.
-- `llaves/llave.controller.js` — mismo patrón al devolver llave.
-- `notificaciones/notificacion.service.js` — generación automática por demora + chequeo de idempotencia (`findByPrestamoRef`).
-
-## 7. Riesgos y observaciones de auditoría
-
-- **Sin cobertura de tests**: confirmado en todo el módulo, incluida la generación automática de novedades por mora.
-- **`reportado_por` spoofeable**: el controller prioriza `req.body.reportado_por` sobre `req.user?.documento`, permitiendo reportar a nombre de otro documento.
-- **Sin `ref` de Mongoose ni validación de existencia** en `recurso_id`/`prestamo_ref` — se puede registrar una novedad con referencia inexistente.
-- **Sin máquina de estados**: cualquier transición entre los 4 estados es válida.
-- **Listado sin paginación por defecto es ilimitado** — riesgo de payload sin cotas en producción con volumen alto.
-- **Campo `notificacion_admin_enviada` muerto**: declarado en el schema pero nunca leído/escrito — funcionalidad de notificación al admin nunca completada.
-- **Duplicación de lógica de creación "post-devolución"**: mismo patrón casi idéntico repetido en `prestamo.controller.js` y `llave.controller.js` en vez de centralizarse en `novedadService`.
-- **Documentación OpenAPI desactualizada**: el enum documentado de `categoria` omite `demora_entrega`, que sí existe en el schema y en el enum Zod real.
+- **Sin cobertura de tests** en todo el módulo, incluida la generación automática por mora.
+- **Campo `notificacion_admin_enviada` muerto**: existe en la tabla y en el passthrough del repositorio, pero ningún flujo lo lee ni lo escribe.
+- **`prestamo_id` sin poblar**: la FK existe desde la 007 pero ningún camino la usa. `findByPrestamoRef` filtra por `llave_id`, no por ella — el nombre es herencia de Mongo y es engañoso.
+- **Listado sin paginación explícita es ilimitado** — sin cotas de payload con volumen alto.
+- **Lógica de creación post-devolución duplicada** en `prestamo.controller.js` con un `require` dinámico dentro del método, en vez de centralizarse en el service.
+- **Solo se puede colgar una novedad de una llave con préstamo activo**: una llave rota en el tablero o devuelta antes de reportarse no tiene dónde engancharse; queda como novedad general y se pierde el vínculo con esa llave.

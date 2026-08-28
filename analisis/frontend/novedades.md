@@ -6,7 +6,7 @@ Permite registrar y gestionar incidencias (daño físico, no funciona, pérdida,
 
 ## 2. Componentes principales
 
-- **`NovedadesPage`** (`src/features/novedades/NovedadesPage.jsx:34`): componente único (sin sub-tabs) que combina: panel de registro manual colapsable, tarjetas de estadísticas por estado, filtros (tipo, estado, categoría, búsqueda) y `DataTable` con las novedades. Toda la lógica de UI (formularios, modales) vive en este único archivo (~366 líneas).
+- **`NovedadesPage`** (`src/features/novedades/NovedadesPage.jsxxx:34`): componente único (sin sub-tabs) que combina: panel de registro manual colapsable, tarjetas de estadísticas por estado, filtros (tipo, estado, categoría, búsqueda) y `DataTable` con las novedades. Toda la lógica de UI (formularios, modales) vive en este único archivo (~366 líneas).
 
 No hay componentes hijos propios del feature; usa exclusivamente primitivos compartidos (`DataTable`, `FormField`, `Input`, `Select`, `Button`, `StatusBadge`).
 
@@ -89,7 +89,7 @@ sequenceDiagram
 
 ## 6. Puntos de inflexión
 
-- **Rama admin vs. no-admin** (`NovedadesPage.jsx:52,160-170`): `isAdmin = usuario?.rol === ROLES.ADMIN` determina si la columna "Estado" es clicable (abre editor) o solo un badge de solo lectura. La ruta `/novedades` en sí **no** tiene guard de rol (`src/App.jsx:44`, sin `roles={[ROLES.ADMIN]}`) — el control de acceso a la edición de estado ocurre a nivel de UI, no de ruta, por lo que la restricción depende exclusivamente de que el backend también valide el rol en `PATCH /novedades/:id/estado` (no verificado en este análisis, fuera de alcance frontend).
+- **Rama admin vs. no-admin** (`NovedadesPage.jsx:52,160-170`): `isAdmin = usuario?.rol === ROLES.ADMIN` determina si la columna "Estado" es clicable (abre editor) o solo un badge de solo lectura. La ruta `/novedades` en sí **no** tiene guard de rol (`src/App.jsxxx:44`, sin `roles={[ROLES.ADMIN]}`) — el control de acceso a la edición de estado ocurre a nivel de UI, no de ruta, por lo que la restricción depende exclusivamente de que el backend también valide el rol en `PATCH /novedades/:id/estado` (no verificado en este análisis, fuera de alcance frontend).
 - **Filtrado combinado**: los filtros de tabla (`tipo_recurso`, `estado`, `categoria`, `busqueda`) se envían como `params` directamente al backend vía `useNovedades(filters)`, mientras que el filtrado de "préstamos pendientes" en el formulario de registro (`pendientesFiltrados`, línea 54) es 100% client-side sobre los datos ya cargados de `llavesApi`.
 - **Sin validación de formulario declarativa**: usa `if` manuales + `Swal.fire({icon:'warning'})` en vez de react-hook-form/zod (a diferencia de `usuarios` y parte de `comunidad`).
 - **Manejo de error**: catch genérico con `err.response?.data?.message ?? 'No se pudo registrar/actualizar'`, sin reintento.

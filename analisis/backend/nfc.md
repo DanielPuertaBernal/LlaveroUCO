@@ -1,5 +1,13 @@
 # Módulo `nfc`
 
+> **Módulo retirado.** El feature `nfc` (gateway serie sobre Socket.IO con
+> lectores ESP32 compartidos) ya no existe en el código: no hay
+> `src/features/nfc/` ni `src/shared/websocket/nfc.gateway.js`. Los lectores
+> actuales son RFID USB tipo teclado emulado y cada operador lee su tarjeta en
+> su propio navegador; la identificación por carnet vive ahora dentro de
+> `llaves` (`procesarLecturaNFC`) y de la búsqueda de persona en `prestamos`.
+> Este documento se conserva como referencia histórica.
+
 ## 1. Propósito
 
 Puerta de entrada HTTP para lectores físicos ESP32/NFC. Expone 2 endpoints REST que reciben lecturas de carnet y devuelven el resultado de negocio (préstamo/devolución de llave o solo identificación) para que el dispositivo lo muestre/actúe. El módulo **no contiene lógica de negocio de llaves** — es un orquestador delgado que delega a `llaves` y `ubicaciones`, y persiste solo un log de idempotencia de eventos.

@@ -91,7 +91,7 @@ classDiagram
     LlaveContext --> MonitorRepository : findByDocumentoMonitor
     LlaveContext --> ReservasSemestralesRepository
     LlaveService --> ReservaRepository : checkin NFC pendiente
-    LlaveService --> UbicacionService : validarOperacion
+    LlaveService --> PorterosService : tienePermiso(usuario, bloque, operacion)
     NfcService ..> LlaveService : procesarLecturaNFC (entry point real)
     NotificacionService ..> LlaveRepository : escribe estado en_mora/demora_entrega
     ReservaService ..> LlaveSchema : bypass repository -- acceso directo
@@ -181,7 +181,7 @@ sequenceDiagram
 
 ## 6. Dependencias externas/cruzadas
 
-**Usa**: `comunidad` (repository, identificación por carnet), `programacion` (repository, clases del día), `monitores` (repository, delegación), `reservas_semestrales` (repository), `reservas` (repository, checkin NFC), `ubicaciones` (service, `validarOperacion`), `auth` (middleware).
+**Usa**: `comunidad` (repository, identificación por carnet), `programacion` (repository, clases del día), `monitores` (repository, delegación), `reservas_semestrales` (repository), `reservas` (repository, checkin NFC), `porteros` (service, `tienePermiso` — gate de rol+bloque desde la migración 009), `salones` (repository, para resolver el bloque del aula), `auth` (middleware).
 
 **Lo usan**:
 - `nfc` — `nfc.service.js` dispara `llaveService.procesarLecturaNFC` en cada lectura (entry point principal).

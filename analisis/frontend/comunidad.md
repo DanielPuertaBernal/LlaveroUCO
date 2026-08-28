@@ -6,7 +6,7 @@ Administra el directorio maestro de personas (docentes, estudiantes, empleados) 
 
 ## 2. Componentes principales
 
-- **`ComunidadPage`** (`src/features/comunidad/ComunidadPage.jsx:84`): página única con `DataTable` de personas, botón "Registrar persona" y un `Sheet` lateral compartido para crear/editar (`sheet.modo === 'crear' | 'editar'`). Deriva `facultadesUnicas` (línea 90) desde los datos cargados para alimentar un `AutocompleteInput` de facultad.
+- **`ComunidadPage`** (`src/features/comunidad/ComunidadPage.jsxxx:84`): página única con `DataTable` de personas, botón "Registrar persona" y un `Sheet` lateral compartido para crear/editar (`sheet.modo === 'crear' | 'editar'`). Deriva `facultadesUnicas` (línea 90) desde los datos cargados para alimentar un `AutocompleteInput` de facultad.
 
 Sin sub-componentes propios adicionales — reutiliza `Sheet`, `FormField`, `Input`, `Select`, `DataTable`, `AutocompleteInput` de `shared/components`.
 
@@ -92,7 +92,7 @@ sequenceDiagram
 
 ## 6. Puntos de inflexión
 
-- **Guard de ruta ADMIN-only**: `/comunidad` está anidada dentro de `<Route element={<ProtectedRoute roles={[ROLES.ADMIN]} />}>` (`src/App.jsx:52-57`). Un usuario AUX que navegue a `/comunidad` es redirigido a `/programacion` (`ProtectedRoute.jsx:39-41`) — a diferencia de `novedades`, aquí el control de acceso sí está a nivel de ruta, no solo de UI.
+- **Guard de ruta ADMIN-only**: `/comunidad` está anidada dentro de `<Route element={<ProtectedRoute roles={[ROLES.ADMIN]} />}>` (`src/App.jsxxx:52-57`). Un usuario AUX que navegue a `/comunidad` es redirigido a `/programacion` (`ProtectedRoute.jsx:39-41`) — a diferencia de `novedades`, aquí el control de acceso sí está a nivel de ruta, no solo de UI.
 - **Validación de formulario manual con regex** (`guardarPersona`, línea 124-132): documento y contacto deben ser solo dígitos (`/^\d+$/`), correo con regex simple de email; documento es obligatorio solo en modo `crear` (no editable después, campo deshabilitado implícitamente al no mostrarse el `FormField` de documento en modo editar). No usa react-hook-form/zod, a diferencia de `usuarios`.
 - **Diferencia crear vs. editar**: en modo `crear` se valida y envía `numero_documento`; en modo `editar` el documento no se toca (`sheet.data._id` se usa como identificador, no el documento).
 - **Manejo de error**: catch con `e.response?.data?.message || 'Error al guardar'`/`'Error al eliminar'`, sin reintento automático.
@@ -100,7 +100,7 @@ sequenceDiagram
 ## 7. Dependencias cruzadas
 
 - **`authStore`**: no se consume directamente en `ComunidadPage.jsx` (el guard de rol lo resuelve `ProtectedRoute`, no el propio componente).
-- **`ProtectedRoute` con `roles={[ROLES.ADMIN]}`**: ver `src/App.jsx:52` y `src/shared/components/ProtectedRoute.jsx:39`.
+- **`ProtectedRoute` con `roles={[ROLES.ADMIN]}`**: ver `src/App.jsxxx:52` y `src/shared/components/ProtectedRoute.jsxxx:39`.
 - **Consumido por otras features**: `comunidadApi` tiene 20 llamadas (según CodeGraph) desde `LlavesPage`, `MonitoresPage`, `PrestamosPage`, `ReservasPage` y otros — es una API central de referencia, no exclusiva de esta página. Dentro del alcance de este documento, `UsuariosPage.jsx:7,190` importa `comunidadApi` directamente (no un hook) para `buscarPorDocumento` al vincular un usuario del sistema con una persona de Comunidad.
 
 ## 8. Riesgos u observaciones de auditoría

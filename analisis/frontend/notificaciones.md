@@ -6,9 +6,9 @@ Gestiona el envío manual y el seguimiento de notificaciones por correo electró
 
 ## 2. Componentes principales
 
-- **`NotificacionesPage`** (`src/features/notificaciones/NotificacionesPage.jsx:14`): shell con navegación por pestañas (`enviar`, `historial`, `configuracion`), estado local `activeTab`. Muestra un badge con el conteo de pendientes (`stats.pendientes`, línea 16-17) en la pestaña "Historial".
-- **`EnviarTab`** (`src/features/notificaciones/tabs/EnviarTab.jsx:284`): dos secciones — préstamos de llaves pendientes (mora) y reservas sin reclamar — cada una con `DataTable`, selección múltiple por checkbox y un `ComposerSheet` (línea 90) compartido para redactar/confirmar el envío.
-- **`HistorialTab`** (`src/features/notificaciones/tabs/HistorialTab.jsx:28`): tabla de registros de envío con filtros (estado, tipo, búsqueda), tarjetas de estadísticas (enviados/pendientes/fallidos) y acciones de reenviar/descartar.
+- **`NotificacionesPage`** (`src/features/notificaciones/NotificacionesPage.jsxxx:14`): shell con navegación por pestañas (`enviar`, `historial`, `configuracion`), estado local `activeTab`. Muestra un badge con el conteo de pendientes (`stats.pendientes`, línea 16-17) en la pestaña "Historial".
+- **`EnviarTab`** (`src/features/notificaciones/tabs/EnviarTab.jsxxx:284`): dos secciones — préstamos de llaves pendientes (mora) y reservas sin reclamar — cada una con `DataTable`, selección múltiple por checkbox y un `ComposerSheet` (línea 90) compartido para redactar/confirmar el envío.
+- **`HistorialTab`** (`src/features/notificaciones/tabs/HistorialTab.jsxxx:28`): tabla de registros de envío con filtros (estado, tipo, búsqueda), tarjetas de estadísticas (enviados/pendientes/fallidos) y acciones de reenviar/descartar.
 - **`ConfiguracionTab`** (`src/features/notificaciones/tabs/ConfiguracionTab.jsx:203`): CRUD de configuración por bloque (tiempo máximo de préstamo, intervalo de recordatorio, máximo de recordatorios, activar/desactivar) más edición de valores por defecto globales (`useActualizarDefaults`, línea 209). Usa `PillSelector` (línea 19) y `Toggle` (línea 80) como sub-componentes locales en vez de `<select>` planos.
 
 ## 3. Diagrama de dependencias
@@ -107,7 +107,7 @@ sequenceDiagram
 
 ## 6. Puntos de inflexión
 
-- **Rol**: no hay guard de `ProtectedRoute` con `roles` en `/notificaciones` (línea `src/App.jsx:43`) — accesible para cualquier usuario autenticado (ADMIN y AUX), a diferencia de comunidad/usuarios.
+- **Rol**: no hay guard de `ProtectedRoute` con `roles` en `/notificaciones` (línea `src/App.jsxxx:43`) — accesible para cualquier usuario autenticado (ADMIN y AUX), a diferencia de comunidad/usuarios.
 - **Validación de formulario en `ComposerSheet`** (`EnviarTab.jsx:107-122`): mensaje personalizado no puede estar vacío; todo destinatario debe tener correo (original o editado inline) antes de habilitar el envío — validación manual con `showError`, no usa zod/react-hook-form.
 - **Correos editables inline**: `correosEditados` (estado local por id) permite corregir un correo faltante o incorrecto justo antes de enviar sin tocar el registro en Comunidad.
 - **Cálculo de estado de notificación automática** (`estadoNotificacion`, `EnviarTab.jsx:58-87`): lógica de negocio compleja en el componente — deriva bloque desde el prefijo alfabético del aula, cruza con `configs` de `configuracionApi`, y calcula minutos restantes vs. `tiempo_maximo_prestamo_minutos`. Es puramente informativa (badge), no dispara el envío real (eso lo hace un scheduler backend).

@@ -6,11 +6,11 @@ Gestiona la carga y consulta de la programación de clases universitarias (impor
 
 ## 2. Componentes principales
 
-- **`ProgramacionPage`** (`src/features/programacion/ProgramacionPage.jsx:759`) — punto de entrada de la ruta `/programacion`. Bifurca por rol: si no es admin, renderiza directamente `VistaSemestre` con el semestre vigente (`src/features/programacion/ProgramacionPage.jsx:780-789`); si es admin, alterna entre `TarjetasSemestres` (listado) y `VistaSemestre` (drilldown) según `semestreSeleccionado` (`src/features/programacion/ProgramacionPage.jsx:793-812`).
-- **`TarjetasSemestres`** (`src/features/programacion/ProgramacionPage.jsx:630`) — vista admin de tarjetas por semestre, con importación de Excel vía `FileUploader`, eliminación y edición de fechas de semestre.
-- **`ModalEditarFechas`** (`src/features/programacion/ProgramacionPage.jsx:557`) — formulario embebido para editar `fecha_inicio`/`fecha_fin` de un semestre.
-- **`VistaSemestre`** (`src/features/programacion/ProgramacionPage.jsx:71`) — componente central: tabla de clases (por día o completa), tabla de reservas semestrales del semestre, entrega de llave desde la tabla, importación/exportación Excel de reservas semestrales, modal de detalle de registro y disparador de `EditarClaseDialog`.
-- **`EditarClaseDialog`** (`src/features/programacion/EditarClaseDialog.jsx:30`) — modal de 3 pestañas (Información, Fantasmas, Horario y Salón) para editar una clase existente, vincular/desvincular grupos fantasma y reasignar horario/salón con validación de conflictos.
+- **`ProgramacionPage`** (`src/features/programacion/ProgramacionPage.jsxxx:759`) — punto de entrada de la ruta `/programacion`. Bifurca por rol: si no es admin, renderiza directamente `VistaSemestre` con el semestre vigente (`src/features/programacion/ProgramacionPage.jsxxx:780-789`); si es admin, alterna entre `TarjetasSemestres` (listado) y `VistaSemestre` (drilldown) según `semestreSeleccionado` (`src/features/programacion/ProgramacionPage.jsxxx:793-812`).
+- **`TarjetasSemestres`** (`src/features/programacion/ProgramacionPage.jsxxx:630`) — vista admin de tarjetas por semestre, con importación de Excel vía `FileUploader`, eliminación y edición de fechas de semestre.
+- **`ModalEditarFechas`** (`src/features/programacion/ProgramacionPage.jsxxx:557`) — formulario embebido para editar `fecha_inicio`/`fecha_fin` de un semestre.
+- **`VistaSemestre`** (`src/features/programacion/ProgramacionPage.jsxxx:71`) — componente central: tabla de clases (por día o completa), tabla de reservas semestrales del semestre, entrega de llave desde la tabla, importación/exportación Excel de reservas semestrales, modal de detalle de registro y disparador de `EditarClaseDialog`.
+- **`EditarClaseDialog`** (`src/features/programacion/EditarClaseDialog.jsxxx:30`) — modal de 3 pestañas (Información, Fantasmas, Horario y Salón) para editar una clase existente, vincular/desvincular grupos fantasma y reasignar horario/salón con validación de conflictos.
 
 ## 3. Diagrama de dependencias
 
@@ -57,7 +57,7 @@ graph TD
 | `POST /programacion/:id/vincular-fantasma` | `useVincularFantasma()` | mutation |
 | `DELETE /programacion/:id/desvincular-fantasma` | `useDesvincularFantasma()` | mutation |
 
-No hay `refetchInterval`/polling en este subsistema; todas las queries son bajo demanda o invalidadas por mutaciones. `EditarClaseDialog` además consume `reservasSemestralesApi.salonesDisponibles` (`src/features/programacion/EditarClaseDialog.jsx:89`) para listar salones libres al reasignar horario, con `staleTime: 30000`.
+No hay `refetchInterval`/polling en este subsistema; todas las queries son bajo demanda o invalidadas por mutaciones. `EditarClaseDialog` además consume `reservasSemestralesApi.salonesDisponibles` (`src/features/programacion/EditarClaseDialog.jsxxx:89`) para listar salones libres al reasignar horario, con `staleTime: 30000`.
 
 ## 5. Flujos principales
 
