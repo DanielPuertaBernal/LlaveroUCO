@@ -7,6 +7,7 @@ const log = createLogger('Server');
 const app = require('./app');
 const pgClient = require('./shared/db/pg.client');
 const ubicacionService = require('./features/ubicaciones/ubicacion.service');
+const elementoAfectadoService = require('./features/elementos-afectados/elementoAfectado.service');
 const notificacionScheduler = require('./features/notificaciones/notificacion.scheduler');
 const usuarioRepository = require('./features/usuarios/usuario.repository');
 const { ROLES, PROVEEDORES_AUTH } = require('./features/auth/auth.constants');
@@ -73,6 +74,7 @@ async function bootstrap() {
   await pgClient.connect();
   await bootstrapSuperadmin();
   await ubicacionService.asegurarIniciales();
+  await elementoAfectadoService.asegurarIniciales();
 
   // 2. Crear servidor HTTP. El gateway NFC serie/Socket.IO (lector USB
   //    compartido detrás del servidor) fue retirado: los lectores RFID USB

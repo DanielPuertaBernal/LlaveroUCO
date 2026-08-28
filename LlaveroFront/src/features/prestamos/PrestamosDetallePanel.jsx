@@ -1,5 +1,6 @@
 import { X, User, UserCheck, MapPin, Clock, Package, CheckCircle2, AlertCircle } from 'lucide-react';
 import StatusBadge from '@/shared/components/ui/StatusBadge';
+import { getPuntoAtencion } from '@/shared/utils/puntoAtencion';
 
 function tiempoTranscurrido(fechaInicio, fechaFin = null) {
   if (!fechaInicio) return '—';
@@ -95,9 +96,9 @@ export default function PrestamosDetallePanel({ prestamo, onClose, onGestionarDe
         <section className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1">
-              <MapPin className="h-3 w-3" /> Ubicación
+              <MapPin className="h-3 w-3" /> Atendido en
             </p>
-            <p className="text-foreground">{(getUbicacionLabel && getUbicacionLabel(prestamo.ubicacion_prestamo)) || prestamo.ubicacion_prestamo || '—'}</p>
+            <p className="text-foreground">{getPuntoAtencion(prestamo, prestamo.ubicacion_prestamo, getUbicacionLabel)}</p>
           </div>
           <div className="space-y-1">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Auxiliar</p>

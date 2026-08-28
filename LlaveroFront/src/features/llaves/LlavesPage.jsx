@@ -8,6 +8,7 @@ import { useSalones } from '@/features/salones/salonesApi';
 import { comunidadApi } from '@/features/comunidad/comunidadApi';
 import { useUbicacionesOperativas } from '@/shared/hooks/useUbicacionesOperativas';
 import { showSuccess, showError } from '@/shared/utils/alert';
+import { getPuntoAtencion } from '@/shared/utils/puntoAtencion';
 import { UBICACIONES } from '@/shared/constants';
 import Swal from '@/shared/lib/swal';
 import { Key, Lock, LockOpen, Search, Loader2, CheckCircle2, CreditCard } from 'lucide-react';
@@ -38,8 +39,8 @@ function buildPendientesColumns({ getUbicacionLabel, devolucionOptions = [], def
     { key: 'horaEntrega', label: 'H. Entrega' },
     {
       key: 'ubicacionPrestamo',
-      label: 'Ubic. Préstamo',
-      render: (v) => getUbicacionLabel(v),
+      label: 'Atendido en',
+      render: (v, row) => getPuntoAtencion(row, v, getUbicacionLabel),
     },
     {
       key: 'estado',

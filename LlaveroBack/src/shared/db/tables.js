@@ -12,6 +12,7 @@ const TABLES = Object.freeze({
   SALONES: 'salones',
   CONFIGURACION_BLOQUES: 'configuracion_bloques',
   UBICACIONES_OPERATIVAS: 'ubicaciones_operativas',
+  ELEMENTOS_AFECTADOS: 'elementos_afectados',
   COMUNIDAD: 'comunidad',
   EQUIPOS: 'equipos',
 

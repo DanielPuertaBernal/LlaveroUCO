@@ -18,6 +18,8 @@ import Button from '@/shared/components/ui/Button';
 import { ROLES } from '@/shared/constants';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/shared/components/ui/Sheet';
 import { sinHTML } from '@/shared/utils/inputValidation';
+import { useElementosAfectados } from '@/features/elementos-afectados/elementosAfectadosApi';
+import ElementosAfectadosSheet from '@/features/elementos-afectados/ElementosAfectadosSheet';
 
 const CATEGORIAS = {
   sin_novedad: 'Sin novedad',
@@ -43,22 +45,25 @@ export default function NovedadesPage() {
     tipo_recurso: '',
     estado: '',
     categoria: '',
+    elemento_afectado: '',
     busqueda: '',
   });
   const [showRegistrar, setShowRegistrar] = useState(false);
+  const [showCatalogo, setShowCatalogo] = useState(false);
   const [tipoNovedad, setTipoNovedad] = useState('general');
   const [busquedaPrestamo, setBusquedaPrestamo] = useState('');
   const [prestamoSeleccionado, setPrestamoSeleccionado] = useState(null);
   const [busquedaEquipo, setBusquedaEquipo] = useState('');
   const [equipoSeleccionado, setEquipoSeleccionado] = useState(null);
   const [salonGeneral, setSalonGeneral] = useState('');
-  const [nuevaNovedad, setNuevaNovedad] = useState({ categoria: '', descripcion: '' });
+  const [nuevaNovedad, setNuevaNovedad] = useState({ categoria: '', descripcion: '', elemento_afectado: '', cantidad_afectada: 1 });
 
   const { data: novedades = [], isLoading } = useNovedades(filters);
   const { data: stats } = useEstadisticasNovedades();
   const { data: pendientesLlaves = [] } = useTodosPendientes();
   const { data: equipos = [] } = useEquipos();
   const { data: salones = [] } = useSalones();
+  const { data: elementosAfectados = [] } = useElementosAfectados();
   const actualizarEstado = useActualizarEstadoNovedad();
   const registrarNovedad = useRegistrarNovedad();
   const usuario = useAuthStore((s) => s.usuario);
@@ -91,7 +96,7 @@ export default function NovedadesPage() {
     setBusquedaEquipo('');
     setEquipoSeleccionado(null);
     setSalonGeneral('');
-    setNuevaNovedad({ categoria: '', descripcion: '' });
+    setNuevaNovedad({ categoria: '', descripcion: '', elemento_afectado: '', cantidad_afectada: 1 });
   }
 
   async function handleRegistrarNovedad() {
@@ -99,6 +104,10 @@ export default function NovedadesPage() {
     if (!nuevaNovedad.descripcion.trim()) return Swal.fire({ icon: 'warning', title: 'La descripción es requerida' });
 
     const payload = { categoria: nuevaNovedad.categoria, descripcion: nuevaNovedad.descripcion };
+    if (nuevaNovedad.elemento_afectado) {
+      payload.elemento_afectado = nuevaNovedad.elemento_afectado;
+      payload.cantidad_afectada = nuevaNovedad.cantidad_afectada;
+    }
     if (tipoNovedad === 'llave') {
       if (!prestamoSeleccionado) return Swal.fire({ icon: 'warning', title: 'Selecciona un préstamo activo' });
       payload.tipo_recurso = 'llave';
@@ -183,6 +192,8 @@ export default function NovedadesPage() {
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 24px">
             ${campo('Tipo recurso', row.tipo_recurso)}
             ${campo('Lugar', row.salon || '—')}
+            ${campo('Elemento afectado', row.elemento_afectado_nombre || '—')}
+            ${campo('Cantidad', row.elemento_afectado_nombre ? row.cantidad_afectada : '—')}
             ${campo('Categoría', CATEGORIAS[row.categoria] || row.categoria)}
             ${campo('Estado', ESTADOS[row.estado]?.label || row.estado)}
             ${campo('Reportado por', `${row.reportado_por_nombre}${row.reportado_por ? ` (${row.reportado_por})` : ''}`)}
@@ -215,6 +226,11 @@ export default function NovedadesPage() {
       render: (v) => (v === 'llave' ? 'Llave' : v === 'equipo' ? 'Equipo' : 'General'),
     },
     { key: 'salon', label: 'Lugar' },
+    {
+      key: 'elemento_afectado_nombre',
+      label: 'Elemento',
+      render: (v, row) => (v ? (row.cantidad_afectada > 1 ? `${v} (${row.cantidad_afectada})` : v) : '—'),
+    },
     { key: 'categoria', label: 'Categoría', render: (v) => CATEGORIAS[v] || v },
     { key: 'reportado_por_nombre', label: 'Reportado por' },
     {
@@ -249,11 +265,25 @@ export default function NovedadesPage() {
           </h1>
           <p className="text-muted-foreground text-sm">Incidencias reportadas en llaves y equipos</p>
         </div>
-        <Button onClick={() => setShowRegistrar(true)}>
-          <PlusCircle className="h-4 w-4 mr-1" />
-          Registrar novedad
-        </Button>
+        <div className="flex gap-2">
+          {isAdmin && (
+            <Button variant="outline" onClick={() => setShowCatalogo(true)}>
+              Elementos
+            </Button>
+          )}
+          <Button onClick={() => setShowRegistrar(true)}>
+            <PlusCircle className="h-4 w-4 mr-1" />
+            Registrar novedad
+          </Button>
+        </div>
       </div>
+
+      {isAdmin && (
+        <ElementosAfectadosSheet
+          open={showCatalogo}
+          onOpenChange={(open) => { if (!open) setShowCatalogo(false); }}
+        />
+      )}
 
       <Sheet open={showRegistrar} onOpenChange={(open) => { if (!open) setShowRegistrar(false); }}>
         <SheetContent>
@@ -386,6 +416,30 @@ export default function NovedadesPage() {
                   <option value="demora_entrega">Demora en entrega de llave</option>
                 </Select>
               </FormField>
+              <div className="grid grid-cols-[1fr_auto] gap-2">
+                <FormField label="Elemento afectado (opcional)">
+                  <Select
+                    value={nuevaNovedad.elemento_afectado}
+                    onChange={(e) => setNuevaNovedad((n) => ({ ...n, elemento_afectado: e.target.value }))}
+                  >
+                    <option value="">Sin elemento específico</option>
+                    {elementosAfectados.map((el) => (
+                      <option key={el.id} value={el.clave}>{el.nombre}</option>
+                    ))}
+                  </Select>
+                </FormField>
+                <FormField label="Cantidad">
+                  <Input
+                    type="number"
+                    min="1"
+                    max="999"
+                    className="w-24"
+                    disabled={!nuevaNovedad.elemento_afectado}
+                    value={nuevaNovedad.cantidad_afectada}
+                    onChange={(e) => setNuevaNovedad((n) => ({ ...n, cantidad_afectada: Number(e.target.value) || 1 }))}
+                  />
+                </FormField>
+              </div>
               <FormField label="Descripción">
                 <Input
                   value={nuevaNovedad.descripcion}
@@ -460,6 +514,17 @@ export default function NovedadesPage() {
             <option value="general">General</option>
           </Select>
         </FormField>
+        <FormField label="Elemento">
+          <Select
+            value={filters.elemento_afectado}
+            onChange={(e) => setFilters((f) => ({ ...f, elemento_afectado: e.target.value }))}
+          >
+            <option value="">Todos</option>
+            {elementosAfectados.map((el) => (
+              <option key={el.id} value={el.clave}>{el.nombre}</option>
+            ))}
+          </Select>
+        </FormField>
         <FormField label="Estado">
           <Select
             value={filters.estado}
@@ -486,7 +551,7 @@ export default function NovedadesPage() {
         </FormField>
         <div className="flex items-end">
           <button
-            onClick={() => setFilters({ tipo_recurso: '', estado: '', categoria: '', busqueda: '' })}
+            onClick={() => setFilters({ tipo_recurso: '', estado: '', categoria: '', elemento_afectado: '', busqueda: '' })}
             title="Limpiar filtros"
             className="p-2 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
           >

@@ -457,7 +457,9 @@ function construirDatosDevolucion({
       quien_entrega: entregaInfo.quien || 'docente',
       numero_documento_entrega: entregaInfo.documento || registro?.numero_documento,
       nombre_entrega: entregaInfo.nombre || registro?.docente,
-      gestionado_por_usuario_id: gestionadoPorUsuarioId,
+      // Columna propia: sobrescribir `gestionado_por_usuario_id` acá borraba
+      // al gestor del préstamo (ver 022_registros_llaves_gestor_devolucion).
+      gestionado_por_devolucion_usuario_id: gestionadoPorUsuarioId,
     },
   };
 }
@@ -482,9 +484,18 @@ function toClientFormat(registro, limiteHorasDemora = 4) {
     value instanceof Date
       ? value.toLocaleDateString('en-CA', { timeZone: 'America/Bogota' })
       : '';
+  // `hour`/`minute` explícitos: sin ellos `toLocaleTimeString` cae en su
+  // formato por defecto, que incluye segundos ("14:30:07"). El resto de la
+  // app ya los descarta — el parser de `time` en pg.client.js trunca a
+  // "HH:MM" — y el horario académico se maneja en minutos.
   const formatTime = (value) =>
     value instanceof Date
-      ? value.toLocaleTimeString('en-GB', { timeZone: 'America/Bogota', hour12: false })
+      ? value.toLocaleTimeString('en-GB', {
+        timeZone: 'America/Bogota',
+        hour12: false,
+        hour: '2-digit',
+        minute: '2-digit',
+      })
       : '';
 
   // duracion_minutos/tiempo_retraso_minutos/tiempo_retraso_devolucion_minutos
@@ -512,6 +523,10 @@ function toClientFormat(registro, limiteHorasDemora = 4) {
     tiempoRetrasoDevolucion: formatMin(registro?.tiempo_retraso_devolucion_minutos),
     ubicacionPrestamo: registro?.ubicacion_prestamo || '',
     ubicacionDevolucion: registro?.ubicacion_devolucion || '',
+    gestionadoPorNombre: registro?.gestionado_por_nombre || '',
+    gestionadoPorRol: registro?.gestionado_por_rol || '',
+    gestionadoPorDevolucionNombre: registro?.gestionado_por_devolucion_nombre || '',
+    gestionadoPorDevolucionRol: registro?.gestionado_por_devolucion_rol || '',
     quienReclama: registro?.quien_reclama || '',
     documentoReclama: registro?.numero_documento_reclama || '',
     nombreReclama: registro?.nombre_reclama || '',
