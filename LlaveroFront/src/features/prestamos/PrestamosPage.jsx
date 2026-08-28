@@ -9,7 +9,7 @@ import { comunidadApi } from '@/features/comunidad/comunidadApi';
 import { useUbicacionesOperativas } from '@/shared/hooks/useUbicacionesOperativas';
 import { showSuccess, showError, showWarning } from '@/shared/utils/alert';
 import { soloNumerosConTope, soloAlfanumericoConGuion, LONGITUD_MAXIMA } from '@/shared/utils/inputValidation';
-import { Package, Loader2, Search, CheckCircle2, History, Clock } from 'lucide-react';
+import { Package, Loader2, Search, CheckCircle2, History, Clock, X } from 'lucide-react';
 
 function tiempoTranscurrido(fechaInicio, fechaFin = null) {
   if (!fechaInicio) return '—';
@@ -30,6 +30,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from '@/sha
 import { FormField, Input, Select } from '@/shared/components/ui/FormField';
 import { cn } from '@/shared/lib/utils';
 import { abrirBuscadorPersonaPorNombre } from '@/shared/utils/personaSearchHotkey';
+import Swal from '@/shared/lib/swal';
 import { useAuthStore } from '@/features/auth/authStore';
 import { ROLES } from '@/shared/constants';
 
@@ -247,10 +248,13 @@ export default function PrestamosPage() {
     setBuscandoPersonaDevolucion(true);
     try {
       let persona = null;
-      const esNumerico = /^\d+$/.test(valor);
-      const intentos = esNumerico
-        ? [comunidadApi.buscarPorDocumento, comunidadApi.buscarPorCarnet]
-        : [comunidadApi.buscarPorCarnet, comunidadApi.buscarPorDocumento];
+      // Carnet primero, siempre. Es lo que la persona pasa por el lector en
+      // el mostrador, y `id_carnet` no coincide con `numero_documento` (son
+      // numéricos los dos pero distintos): buscar por documento primero haría
+      // que un carnet que choque con el documento de otra persona resuelva a
+      // la persona equivocada. El documento queda como respaldo para quien
+      // llega sin carnet.
+      const intentos = [comunidadApi.buscarPorCarnet, comunidadApi.buscarPorDocumento];
 
       for (const intento of intentos) {
         try {
@@ -276,6 +280,28 @@ export default function PrestamosPage() {
     } finally {
       setBuscandoPersonaDevolucion(false);
     }
+  }
+
+  /**
+   * The queue only lives in component state, and as a modal this dialog can be
+   * dismissed by clicking the backdrop — something the previous inline panel
+   * had no way to do. Confirm before throwing away scanned equipment.
+   */
+  async function cerrarModalDevolucion() {
+    if (equiposParaDevolver.length > 0) {
+      const { isConfirmed } = await Swal.fire({
+        icon: 'warning',
+        title: '¿Cerrar sin confirmar?',
+        text: `Hay ${equiposParaDevolver.length} equipo${equiposParaDevolver.length > 1 ? 's' : ''} en la cola que todavía no se devolvió.`,
+        showCancelButton: true,
+        confirmButtonText: 'Cerrar y descartar',
+        cancelButtonText: 'Seguir devolviendo',
+      });
+      if (!isConfirmed) return;
+    }
+    setPrestamoSeleccionadoId('');
+    setEquiposParaDevolver([]);
+    setBarcodeDevolucion('');
   }
 
   function gestionarDevolucionDePrestamo(prestamo) {
@@ -871,17 +897,25 @@ export default function PrestamosPage() {
         </>
       )}
 
-      {prestamoSeleccionado && (
-        <div className="bg-card border border-border rounded-lg p-5 space-y-3">
+      {prestamoSeleccionado && createPortal(
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60"
+          onClick={cerrarModalDevolucion}
+        >
+          <div
+            className="w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-card border border-border rounded-lg shadow-lg p-5 space-y-3"
+            onClick={(e) => e.stopPropagation()}
+          >
           <div className="flex items-center justify-between flex-wrap gap-2">
             <h3 className="font-semibold text-foreground">
-              Devolución parcial por escaneo: {prestamoSeleccionado.docente_nombre}
+              Devolución de equipos: {prestamoSeleccionado.docente_nombre}
             </h3>
             <button
-              onClick={() => setPrestamoSeleccionadoId('')}
-              className="text-sm text-muted-foreground hover:text-foreground underline"
+              onClick={cerrarModalDevolucion}
+              className="text-muted-foreground hover:text-foreground transition-colors"
+              title="Cerrar"
             >
-              Cerrar
+              <X className="h-5 w-5" />
             </button>
           </div>
 
@@ -1002,7 +1036,9 @@ export default function PrestamosPage() {
               </Button>
             </div>
           )}
-        </div>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );
