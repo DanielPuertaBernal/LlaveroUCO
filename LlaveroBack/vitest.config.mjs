@@ -8,5 +8,9 @@ export default defineConfig({
     // Los tests de esta primera tanda son de funciones puras y no tocan la
     // base. Cuando entren los de repositorio harán falta hooks de setup.
     globals: false,
+    // El dominio de llaves razona en hora de Bogotá y varios helpers leen la
+    // hora LOCAL del proceso. Sin fijar TZ, la suite pasa en la máquina del
+    // desarrollador (-05) y falla en el contenedor/CI (UTC).
+    env: { TZ: 'America/Bogota' },
   },
 });
