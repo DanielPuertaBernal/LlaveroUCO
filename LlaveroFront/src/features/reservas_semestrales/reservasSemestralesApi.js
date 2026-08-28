@@ -29,23 +29,7 @@ export const reservasSemestralesApi = {
     apiClient.put(`/programacion/reservas-semestrales/${encodeURIComponent(id)}`, data),
 };
 
-export function useDisponibilidadSemestral(nombre_salon, dia) {
-  return useQuery({
-    queryKey: ['reservas-semestrales', 'disponibilidad', nombre_salon, dia],
-    queryFn: () =>
-      reservasSemestralesApi.disponibilidad(nombre_salon, dia).then((r) => r.data.data),
-    enabled: !!nombre_salon && !!dia,
-    staleTime: 30 * 1000,
-  });
-}
 
-export function useTodasReservasSemestrales() {
-  return useQuery({
-    queryKey: ['reservas-semestrales', 'todas'],
-    queryFn: () =>
-      reservasSemestralesApi.todas().then((r) => r.data.data.reservas),
-  });
-}
 
 export function useCrearReservaSemestral() {
   const qc = useQueryClient();
@@ -57,15 +41,6 @@ export function useCrearReservaSemestral() {
   });
 }
 
-export function useCancelarGrupoSemestral() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: reservasSemestralesApi.cancelarGrupo,
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['reservas-semestrales'] });
-    },
-  });
-}
 
 export function useValidarConflictosSemestral() {
   return useMutation({
@@ -73,16 +48,6 @@ export function useValidarConflictosSemestral() {
   });
 }
 
-export function useSalonesDisponiblesSemestral(params) {
-  return useQuery({
-    queryKey: ['reservas-semestrales', 'salones-disponibles', params],
-    queryFn: () =>
-      reservasSemestralesApi
-        .salonesDisponibles(params.dia, params.hora_inicio, params.hora_fin, params.semestre, params.fecha_inicio_vigencia, params.fecha_fin_vigencia)
-        .then((r) => r.data.data.salones || []),
-    enabled: !!(params?.dia && params?.hora_inicio && params?.hora_fin),
-  });
-}
 
 export function useSalonesDisponiblesFranja(dia, hora_inicio, hora_fin, semestre, fecha_inicio_vigencia, fecha_fin_vigencia, excluir_grupo_id) {
   return useQuery({

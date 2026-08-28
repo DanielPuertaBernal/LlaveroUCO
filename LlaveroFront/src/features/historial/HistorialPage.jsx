@@ -270,7 +270,7 @@ export default function HistorialPage() {
 // Modal "Entrega" — captura de carnet (lector USB tipo teclado o digitación
 // manual) y despacha al endpoint inteligente /llaves/procesar-nfc, que
 // decide del lado del backend si corresponde una entrega o una devolución.
-// Mismo patrón de captura que LlavesPage.jsx: Enter dispara inmediato, y un
+// Captura de lector RFID: Enter dispara inmediato, y un
 // debounce de 400ms cubre lectores que no envían Enter tras el código.
 // ---------------------------------------------------------------------------
 function EntregaCarnetModal({ onClose }) {

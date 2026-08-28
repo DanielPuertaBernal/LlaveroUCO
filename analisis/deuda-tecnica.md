@@ -1,44 +1,52 @@
-# Deuda técnica e inconsistencias — AulaSync
+# Deuda técnica e inconsistencias — LlaveroUCO
 
-Consolidado de los hallazgos de la auditoría (2026-08-06) sobre los 3 repos. Detalle por módulo en [backend/](./backend/) y [frontend/](./frontend/).
+Estado verificado contra el código y la base, no contra la auditoría original. Detalle por módulo en [backend/](./backend/) y [frontend/](./frontend/).
 
-## Backend (AulaSyncBackend)
+## Abierto
 
-| Hallazgo | Riesgo |
+| Hallazgo | Riesgo | Dónde |
+|---|---|---|
+| **Cero cobertura de tests** en los dos repos: no hay archivos de test ni script `test` en ningún `package.json` | Alto | todo el proyecto |
+| Lógica de solapamiento de horarios duplicada entre `reservas` y `reservas_semestrales`, más una tercera lectura en `notificacion.scheduler` | Medio | `reserva.service.js`, `reservas_semestrales.service.js` |
+| Búsqueda de persona por documento/carnet repetida en cuatro páginas, con orden de resolución distinto en cada una | Medio | `PrestamosPage`, `MonitoresPage`, `ReservasPage`, `ReservasSemestralesPage` |
+| Bypass de capas: varios repositorios consultan tablas de otros features en vez de pasar por el repositorio dueño | Medio | ver `llaves.md` §7, `reservas_semestrales.md` §6 |
+| `configuracion_bloques` sin CHECK: el tope de `max(1440)` minutos vive solo en Zod | Bajo | un seed o script puede dejar valores fuera de rango |
+| `validarOperacion` en `ubicacion.service.js` es código muerto y aparenta ser un gate de autorización | Bajo | ver [catálogos](./backend/catalogos.md) §4 |
+| `notificaciones.notificacion_admin_enviada` y `novedades.prestamo_id`: columnas que ningún flujo lee ni escribe | Bajo | |
+| Solo se puede reportar una novedad sobre una llave con préstamo activo | Bajo | una llave rota en el tablero no tiene dónde engancharse |
+
+## Resuelto
+
+| Hallazgo original | Qué pasó |
 |---|---|
-| Cero cobertura de tests en todo el backend | Alto |
-| ~~Sin transacciones en `llaves`~~ **Resuelto** | Ambos dominios usan transacciones: `llaves` encadena sus inserts en `knex.transaction()` (`llave.write-model.js`, `llave.workflows.js`) y `prestamos` hace lo propio en `crear()`/`registrarDevolucion()` |
-| Lógica de solapamiento de horarios triplicada en `programacion`/`reservas`/`reservas_semestrales` | Medio — candidato a unificar |
-| Relaciones entre catálogos por texto plano (nombre), sin integridad referencial | Medio |
-| Varios módulos acceden a schemas de otros módulos saltándose la capa `repository` | Medio — bypass de capas |
-| `POST /api/comunidad/sync` público, sin autenticación | Alto — endpoint abierto |
-| Autenticación NFC de ESP32 por clave única compartida (`X-Device-Key`), sin identidad por dispositivo | Medio |
+| Sin transacciones en `llaves` | `knex.transaction()` en `llave.write-model.js` y `llave.workflows.js` |
+| `POST /api/comunidad/sync` público | Protegido con `requireApiKey('COMUNIDAD_SYNC_API_KEY')` + `syncLimiter` |
+| Autorización ADMIN solo en cliente | `requireAdmin` en las rutas de `novedades` y `usuarios` |
+| Relaciones entre catálogos por texto plano, sin integridad referencial | FK reales; borrado en blando protegido por `trg_block_soft_delete` en 14 tablas |
+| Sin índice sobre `sesiones.token_hash` | `ux_usuario_sesiones_token_hash`, único parcial |
+| `AlertTriangle` sin import en `NotificacionesTab.jsx` | El archivo era código muerto; eliminado |
+| Código huérfano: `LlavesPage.jsx`, `NotificacionesTab.jsx` | Eliminados; `/llaves` ya redirigía a `/gestion-salones` |
+| Hooks y endpoints sin consumidor | Removidos de `llavesApi` (`pendientes`, `hoy`, `exportarHistorial`) y de `reservasSemestralesApi` (4 hooks) |
+| Sin máquina de estados en `novedades` | `RANGO_ESTADO` impide retroceder (migración 016) |
+| `reportado_por` spoofeable desde el body | Se deriva de `req.user` en el controller |
 
-Resuelto correctamente (no es deuda): índice único `{numero_documento, aula, dia_entrega}` en `Llave` previene doble entrega el mismo día.
+Los endpoints de backend que respaldaban los métodos removidos siguen existiendo (`/llaves/pendientes`, `/llaves/dia`, `/llaves/historial/exportar`): se retiró el cliente, no el servicio.
 
-## Frontend (AulaSyncFrontend)
+## Obsoleto
 
-| Hallazgo | Riesgo |
-|---|---|
-| Bug real: `AlertTriangle` usado sin import en `NotificacionesTab.jsx:200` | Alto — rompe en runtime |
-| Autorización de rol ADMIN aplicada solo en cliente (`novedades`, `usuarios`) | Alto — depende de que el backend valide también (verificar) |
-| Riesgo en socket NFC: `socket.off()` sin handler específico puede anular listeners de otros consumidores del socket singleton | Medio |
-| Código huérfano: `features/llaves/LlavesPage.jsx`, `NotificacionesTab.jsx` (no enrutados), `configuracion/ConfiguracionPage.jsx` (reemplazado), `gestion-salones/GestionSalonesPage.jsx` (wrapper trivial de 5 líneas) | Bajo — limpieza |
-| Lógica de búsqueda de persona por documento/carnet/NFC duplicada en `PrestamosPage`, `MonitoresPage`, `ReservasPage`, `ReservasSemestralesPage` | Medio — candidato a hook compartido |
-| Endpoints/hooks sin consumidor: aprobar/rechazar de reservas individuales, 4 hooks de `reservasSemestralesApi` | Bajo — limpieza |
+Desapareció con el retiro del gateway NFC y los lectores ESP32:
 
-Nota de diseño (no es deuda per se): access token solo en memoria (Zustand), refresh token en `localStorage`, con deduplicación de refresh concurrente en el interceptor de axios.
+- Autenticación de dispositivo por clave compartida `X-Device-Key`.
+- `socket.off()` sin handler específico anulando listeners de otros consumidores del socket singleton.
+
+## Falso
+
+- `ConfiguracionPage.jsx` no es huérfana: está enrutada en `/configuracion`.
 
 ## Priorización sugerida
 
-1. Fix inmediato: import faltante de `AlertTriangle` (rompe en runtime).
-2. Cerrar `POST /api/comunidad/sync` sin auth.
-3. Transacciones Mongo en `llaves` (condición de carrera real; `prestamos` ya las tiene).
-4. Verificar que la autorización ADMIN del frontend tenga contraparte real en el backend.
-5. Unificar lógica de solapamiento de horarios (3 copias) y búsqueda de persona (4 copias).
-6. Limpieza de código huérfano y endpoints sin consumidor.
-7. Tests: backend sin cobertura — priorizar `llaves`/`prestamos` por el riesgo de concurrencia.
-
-## Pendiente
-
-Este documento cubre backend y frontend, los dos repos que quedan en el proyecto. El firmware ESP32+RC522 fue retirado junto con el gateway NFC; los lectores actuales son RFID USB tipo teclado emulado y no tienen código propio que auditar.
+1. **Tests.** Es el único item de riesgo alto que queda y bloquea todo lo demás: sin red, cualquier unificación de lógica duplicada se hace a ciegas. Empezar por `llaves` y `prestamos`, que son los de concurrencia real.
+2. Unificar la búsqueda de persona en un hook compartido — cuatro copias con criterios distintos ya produjeron un bug (buscar por documento antes que por carnet devolvía la persona equivocada).
+3. Unificar el solapamiento de horarios.
+4. Cerrar el bypass de capas.
+5. Borrar `validarOperacion` y las columnas muertas.
