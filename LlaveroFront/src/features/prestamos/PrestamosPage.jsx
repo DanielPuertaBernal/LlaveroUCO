@@ -28,7 +28,6 @@ import StatusBadge from '@/shared/components/ui/StatusBadge';
 import Button from '@/shared/components/ui/Button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from '@/shared/components/ui/Sheet';
 import { FormField, Input, Select } from '@/shared/components/ui/FormField';
-import { cn } from '@/shared/lib/utils';
 import { abrirBuscadorPersonaPorNombre } from '@/shared/utils/personaSearchHotkey';
 import Swal from '@/shared/lib/swal';
 import { useAuthStore } from '@/features/auth/authStore';

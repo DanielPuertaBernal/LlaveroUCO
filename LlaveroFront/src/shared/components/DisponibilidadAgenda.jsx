@@ -61,7 +61,7 @@ export default function DisponibilidadAgenda({
   // Bloques libres: solo slots disponibles
   const libreBlocks = buildBlocks(
     HORAS.filter((h) => slotMap[h].disponible).map((h) => ({ hora: h, _extra: { disponible: true, motivo: null, detalle: '' } })),
-    (s) => 'libre'
+    () => 'libre'
   );
 
   // Bloques de clase/semestral

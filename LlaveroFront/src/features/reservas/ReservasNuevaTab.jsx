@@ -1,9 +1,9 @@
 import { CalendarDays, Loader2, CreditCard, CheckCircle2, Search } from 'lucide-react';
 import Button from '@/shared/components/ui/Button';
-import { FormField, Input, Select } from '@/shared/components/ui/FormField';
+import { FormField, Input } from '@/shared/components/ui/FormField';
 import { cn } from '@/shared/lib/utils';
 import DisponibilidadAgenda from '@/shared/components/DisponibilidadAgenda';
-import { soloNombre, sinHTML, soloNumerosConTope, LONGITUD_MAXIMA } from '@/shared/utils/inputValidation';
+import { sinHTML, soloNumerosConTope, LONGITUD_MAXIMA } from '@/shared/utils/inputValidation';
 import { MobileTimePicker } from '@mui/x-date-pickers/MobileTimePicker';
 import { MobileDatePicker } from '@mui/x-date-pickers/MobileDatePicker';
 import dayjs from 'dayjs';

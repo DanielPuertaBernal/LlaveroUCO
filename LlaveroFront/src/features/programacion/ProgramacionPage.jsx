@@ -14,7 +14,6 @@ import {
   useActualizarFechasSemestre,
   useReservasSemestrales,
   useImportarReservasSemestrales,
-  useEliminarReservasSemestrales,
   useEliminarReservaIndividual,
   programacionApi,
 } from './programacionApi';
@@ -123,7 +122,6 @@ function VistaSemestre({ semestre, onVolver, isAdmin }) {
     semestre.codigo
   );
   const importarReservas = useImportarReservasSemestrales();
-  const eliminarReservas = useEliminarReservasSemestrales();
   const eliminarReservaIndividual = useEliminarReservaIndividual(semestre.codigo);
 
   const entregarLlave = useEntregarLlave();
@@ -904,7 +902,7 @@ function TarjetasSemestres({ semestres, loading, onSeleccionar, importar, onImpo
           </div>
         ) : semestresFiltrados.length === 0 ? (
           <p className="text-sm text-muted-foreground py-8 text-center">
-            Ningún semestre coincide con "{busqueda}".
+            Ningún semestre coincide con &quot;{busqueda}&quot;.
           </p>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

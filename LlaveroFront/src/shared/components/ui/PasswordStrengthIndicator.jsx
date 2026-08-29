@@ -7,7 +7,7 @@ const PASSWORD_RULES = [
   { label: 'Una letra mayúscula', test: (v) => /[A-Z]/.test(v) },
   { label: 'Una letra minúscula', test: (v) => /[a-z]/.test(v) },
   { label: 'Un número', test: (v) => /[0-9]/.test(v) },
-  { label: 'Un carácter especial', test: (v) => /[!@#$%^&*(),.?":{}|<>\-_=+\[\]\\/~`]/.test(v) },
+  { label: 'Un carácter especial', test: (v) => /[!@#$%^&*(),.?":{}|<>\-_=+[\]\\/~`]/.test(v) },
 ];
 
 export function passwordRules() {

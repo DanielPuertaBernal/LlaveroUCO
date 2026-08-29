@@ -17,7 +17,7 @@ import { MobileDatePicker } from '@mui/x-date-pickers/MobileDatePicker';
 import dayjs from 'dayjs';
 import StatusBadge from '@/shared/components/ui/StatusBadge';
 import Button from '@/shared/components/ui/Button';
-import { FormField, Input, Select } from '@/shared/components/ui/FormField';
+import { FormField, Select } from '@/shared/components/ui/FormField';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/shared/components/ui/Sheet';
 import { soloNumerosConTope, LONGITUD_MAXIMA } from '@/shared/utils/inputValidation';
 
@@ -273,7 +273,7 @@ export default function HistorialPage() {
 // Captura de lector RFID: Enter dispara inmediato, y un
 // debounce de 400ms cubre lectores que no envían Enter tras el código.
 // ---------------------------------------------------------------------------
-function EntregaCarnetModal({ onClose }) {
+function EntregaCarnetModal() {
   const [valor, setValor] = useState('');
   const [resultado, setResultado] = useState(null); // { tipo, mensaje, ... } último resultado mostrado
   const inputRef = useRef(null);

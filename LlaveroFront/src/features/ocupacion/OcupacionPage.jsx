@@ -560,7 +560,7 @@ export default function OcupacionPage() {
               </Select>
               {facultad !== 'ALL' && (
                 <p className="text-[11px] text-muted-foreground">
-                  La tabla muestra solo las horas que esta facultad ocupa en cada aula (no el total del salón). Abre el detalle de un aula → "Por Facultad" para comparar contra las demás.
+                  La tabla muestra solo las horas que esta facultad ocupa en cada aula (no el total del salón). Abre el detalle de un aula → &quot;Por Facultad&quot; para comparar contra las demás.
                 </p>
               )}
             </FormField>

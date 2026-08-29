@@ -10,9 +10,7 @@ import {
 } from './reservasApi';
 import { useBloques } from '@/features/bloques/bloquesApi';
 import { useSalones } from '@/features/salones/salonesApi';
-import { useAuthStore } from '@/features/auth/authStore';
 import { comunidadApi } from '@/features/comunidad/comunidadApi';
-import { ROLES } from '@/shared/constants';
 import Swal from '@/shared/lib/swal';
 import { CalendarDays, Plus, Sparkles } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
@@ -50,8 +48,6 @@ export default function ReservasPage() {
   const crear = useCrearReserva();
   const cancelar = useCancelarReserva();
   const editar = useEditarReserva();
-  const usuario = useAuthStore((s) => s.usuario);
-  const isAdmin = usuario?.rol === ROLES.ADMIN;
 
   const { data: disponibilidad } = useDisponibilidad(form.nombre_salon, form.fecha);
   const { data: salonesLibres = [], isLoading: buscandoSalones } = useSalonesDisponibles(buscarParams);

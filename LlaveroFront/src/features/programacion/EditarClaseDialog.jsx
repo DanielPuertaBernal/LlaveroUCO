@@ -28,7 +28,7 @@ import { Search, CheckCircle, XCircle, Loader2, Ghost, X, Plus } from 'lucide-re
 
 const DIAS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 
-export default function EditarClaseDialog({ open, onOpenChange, clase, semestre, facultades = [], todosRegistros = [] }) {
+export default function EditarClaseDialog({ open, onOpenChange, clase, semestre, todosRegistros = [] }) {
   const actualizarClase = useActualizarClase();
   const vincularFantasma = useVincularFantasma();
   const desvincularFantasma = useDesvincularFantasma();

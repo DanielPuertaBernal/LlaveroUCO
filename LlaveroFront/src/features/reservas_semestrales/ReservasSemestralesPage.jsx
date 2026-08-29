@@ -8,7 +8,6 @@ import {
   reservasSemestralesApi,
 } from './reservasSemestralesApi';
 import { useSemestres, useSemestreVigente } from '@/features/programacion/programacionApi';
-import { useBloques } from '@/features/bloques/bloquesApi';
 import { comunidadApi } from '@/features/comunidad/comunidadApi';
 import Swal from '@/shared/lib/swal';
 import { toast } from 'sonner';
@@ -22,7 +21,7 @@ import { cn } from '@/shared/lib/utils';
 import { MobileTimePicker } from '@mui/x-date-pickers/MobileTimePicker';
 import dayjs from 'dayjs';
 import { abrirBuscadorPersonaPorNombre } from '@/shared/utils/personaSearchHotkey';
-import { soloAlfanumerico, sinHTML, soloNumerosConTope, LONGITUD_MAXIMA } from '@/shared/utils/inputValidation';
+import { sinHTML, soloNumerosConTope, LONGITUD_MAXIMA } from '@/shared/utils/inputValidation';
 
 const DIAS_SEMANA = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 
@@ -364,7 +363,6 @@ export default function ReservasSemestralesPage() {
   const [form, setForm] = useState(FORM_INICIAL);
   const [franjas, setFranjas] = useState([{ ...FRANJA_INICIAL }]);
 
-  const { data: bloques = [] } = useBloques();
   const { data: semestres = [] } = useSemestres();
   const { data: semestreVigente } = useSemestreVigente();
   const crear = useCrearReservaSemestral();
@@ -373,7 +371,6 @@ export default function ReservasSemestralesPage() {
   // Pre-cargar datos en modo edición
   useEffect(() => {
     if (editData) {
-      const primera = editData.franjas[0] || {};
       setForm({
         solicitante_documento: editData.numero_documento || '',
         solicitante_nombre: editData.docente || '',

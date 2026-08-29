@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Loader2, Search, Sparkles, School, Users, Plus } from 'lucide-react';
 import { MobileDatePicker } from '@mui/x-date-pickers/MobileDatePicker';
 import { MobileTimePicker } from '@mui/x-date-pickers/MobileTimePicker';
