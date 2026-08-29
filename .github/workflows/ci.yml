@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: backend (TZ=${{ matrix.tz }})
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: LlaveroBack
+    strategy:
+      fail-fast: false
+      matrix:
+        # El contenedor de despliegue corre en UTC y el equipo desarrolla en
+        # -05. Varios helpers de fecha se rompieron por leer el reloj local del
+        # proceso, así que la suite se ejecuta en las dos zonas a propósito.
+        tz: [America/Bogota, UTC]
+    env:
+      TZ: ${{ matrix.tz }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.22.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: LlaveroBack/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm test
+
+  frontend:
+    name: frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: LlaveroFront
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.22.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: LlaveroFront/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+
+      # `--max-warnings` deja pasar las 27 advertencias de exhaustive-deps que
+      # ya existían y bloquea cualquier nueva. Bajar este número a medida que
+      # se resuelvan; nunca subirlo.
+      - run: pnpm lint --max-warnings 27
+
+      - run: pnpm build
