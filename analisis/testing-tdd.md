@@ -1,14 +1,25 @@
 # Testing y TDD — LlaveroUCO
 
-Análisis de exploración SDD (2026-08-23) sobre la adopción de tests automatizados en el monorepo. Cubre `LlaveroBack` y `LlaveroFront`.
+Análisis de exploración SDD (2026-08-23) sobre la adopción de tests automatizados en el monorepo. Cubre `LlaveroBack` y `LlaveroFront`. Estado de ejecución actualizado el 2026-08-28.
 
 ## Estado actual
 
-- Cero infraestructura de tests en ambos paquetes: sin `test` script, sin dependencias de testing, sin ficheros `*.test.*`/`*.spec.*` en código propio.
-- Sin CI (`.github/workflows` no existe) y sin hooks pre-commit (solo los `.sample` por defecto de git).
+Los pasos 1 a 4 de la secuencia de abajo están hechos. El backend tiene Vitest y
+**139 tests en 7 archivos** bajo `LlaveroBack/tests/`, verdes tanto con
+`TZ=America/Bogota` como con `TZ=UTC`.
+
+- `vitest.config.mjs` fija `env: { TZ: 'America/Bogota' }` para que la suite no
+  dependa de la zona de la máquina (el host de desarrollo está en -05, el
+  contenedor en UTC). Los tests son ESM contra fuente CommonJS vía interop.
+- Escribir los tests destapó un bug real de zona horaria: seis helpers de fecha
+  y varios call sites leían el reloj LOCAL del proceso para razonar sobre el
+  horario académico, que siempre es Bogotá. Ver la sección "Zona horaria".
+- Frontend: sigue sin runner. Es el paso 5, pendiente.
+- Sin CI (`.github/workflows` no existe) y sin hooks pre-commit. Una suite que no
+  se ejecuta en PRs no protege nada; es el siguiente trabajo de infraestructura.
 - Backend: Node/CommonJS, Express 4, Knex/PostgreSQL, pnpm. Sin linter configurado.
-- Frontend: React 18 + Vite 5, ESLint 8 ya configurado. Lockfile duplicado (`pnpm-lock.yaml` + `package-lock.json`, deuda no relacionada con testing).
-- El modo Strict TDD está activo a nivel de usuario, pero no hay runner instalado en ningún paquete — hoy no se puede aplicar TDD real a ningún cambio.
+- Frontend: React 18 + Vite 5, ESLint 8 ya configurado. Lockfile duplicado
+  (`pnpm-lock.yaml` + `package-lock.json`, deuda no relacionada con testing).
 
 ## Objetivos de mayor valor para empezar (backend)
 
@@ -37,13 +48,42 @@ Frontend: features bajo `src/features/*` y sus `*Api.js` son candidatos a React 
 
 **Vitest en ambos paquetes** + `supertest` (backend) + React Testing Library (frontend).
 
-1. Backend — funciones puras: `date.helper.js`, `normalize.helper.js`.
-2. Backend — `llave.domain.js` (lógica de negocio pura).
-3. Backend — `llave.workflows.js` vía su seam de DI existente.
-4. Backend — suite smoke con `supertest` sobre `src/app.js` (health check, 404, guard de auth).
-5. Frontend — Vitest + RTL, empezando por un util compartido y luego una feature de alto tráfico.
+1. ~~Backend — funciones puras: `date.helper.js`, `normalize.helper.js`.~~ Hecho (`fe3de8e`), 42 tests.
+2. ~~Backend — `llave.domain.js` (lógica de negocio pura).~~ Hecho (`8b68107`), 40 tests.
+3. ~~Backend — `llave.workflows.js` vía su seam de DI existente.~~ Hecho (`14d4f92`), 38 tests con fakes para las 19 dependencias inyectadas.
+4. ~~Backend — suite smoke con `supertest` sobre `src/app.js` (health check, 404, guard de auth).~~ Hecho, 14 tests.
+5. Backend — repositorios contra una base de test desechable. **Pendiente.**
+6. Frontend — Vitest + RTL, empezando por un util compartido y luego una feature de alto tráfico. **Pendiente.**
 
 Se deja fuera de este primer ciclo, por mayor esfuerzo y menor ROI inicial: tests de integración de repositorios Knex/PostgreSQL y wiring de CI.
+
+## Zona horaria (bug encontrado al escribir los tests)
+
+Toda la operación ocurre en hora de Bogotá (UTC-5, sin DST), pero el proceso no
+corre necesariamente ahí: el contenedor de despliegue arranca en UTC. Se
+encontraron y corrigieron tres capas del mismo defecto:
+
+| Commit | Qué leía mal el reloj |
+|---|---|
+| `3dbaf56` | Seis helpers de `date.helper.js` y el workflow NFC usaban `getHours()`/`getDay()` — un reclamo de las 07:20 se leía como 12:20 y fabricaba 320 minutos de retraso |
+| `4975abd` | Las reservas se anclaban con `new Date("2026-03-02T14:00")` sin offset, adelantándolas cinco horas y rompiendo la ventana de cancelación |
+| `c38fd27` | Los filtros de reportes armaban `T00:00:00`/`T23:59:59.999` sin offset, corriendo el rango del día |
+
+`date.helper.js` es hoy el único lugar donde un instante se traduce a
+fecha/hora de negocio y viceversa:
+
+- `fechaEnBogota(fecha)` → `"YYYY-MM-DD"`
+- `horaEnBogota(fecha)` → `"HH:MM"`
+- `minutosDelDiaEnBogota(fecha)` → entero
+- `instanteEnBogota(fechaStr, horaStr)` → `Date | null`
+- `rangoDelDiaEnBogota(fechaStr)` → `[Date, Date] | null`
+
+**Regla**: no usar `getHours()`/`getMinutes()`/`getDay()` ni construir
+`T00:00:00` a mano para lógica de horario. Hoy no queda ninguno fuera del helper.
+
+`tests/date.helper.tz.test.js` y `tests/reserva.service.tz.test.js` fuerzan
+`TZ=UTC` con `vi.stubEnv` y afirman las respuestas de Bogotá. Hacen lo contrario
+que la config a propósito: fijar `TZ` hace honestos a los tests, no al código.
 
 ## Hallazgos de duplicación / simplificación (informativo, sin tocar código)
 
@@ -67,4 +107,13 @@ El refactor de duplicación de hooks CRUD del frontend (`createCrudResource()`) 
 
 ## Siguiente paso
 
-`sdd-propose` para el cambio: añadir Vitest a ambos paquetes, `supertest`/RTL, y primera suite de tests unitarios (`date.helper.js`, `normalize.helper.js`, `llave.domain.js`).
+Dos frentes, en este orden:
+
+1. **CI.** Hay 139 tests y nada que los ejecute en un PR. Un workflow que corra
+   `pnpm test` en `LlaveroBack` es lo que convierte la suite en una red de
+   verdad. Correrlo con `TZ=UTC` además del default, ya que es la zona del
+   contenedor de despliegue.
+2. **Frontend** — Vitest + RTL (paso 6 de la secuencia).
+
+Los tests de repositorio (paso 5) siguen requiriendo una base desechable y
+quedan después de los dos anteriores.
