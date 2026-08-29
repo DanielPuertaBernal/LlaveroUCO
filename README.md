@@ -7,6 +7,7 @@ Sistema de control de llaves, salones y equipos de la Universidad Católica de O
 - `LlaveroBack/` — API REST (Node/Express + PostgreSQL). Ver [README](./LlaveroBack/README.md).
 - `LlaveroFront/` — Aplicación web (React + Vite). Ver [README](./LlaveroFront/README.md).
 - `analisis/` — Documentación técnica y auditoría del sistema (parte histórica, previa a la migración a PostgreSQL).
+- `PENDIENTES.md` — Trabajo pendiente, priorizado por riesgo. Ver [pendientes](./PENDIENTES.md).
 
 ## Stack
 
