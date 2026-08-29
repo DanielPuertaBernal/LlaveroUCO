@@ -3,8 +3,11 @@
 .engram/
 .atl/
 
-# Dependencias
+# Dependencias — pnpm es el gestor del proyecto; un package-lock.json
+# conviviendo con pnpm-lock.yaml hace que CI instale un árbol distinto al local.
 **/node_modules/
+package-lock.json
+yarn.lock
 
 # Env / secretos
 .env

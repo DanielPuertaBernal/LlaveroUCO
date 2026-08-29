@@ -2,6 +2,10 @@
   "name": "llavero-front",
   "version": "1.0.0",
   "private": true,
+  "packageManager": "pnpm@11.22.0",
+  "engines": {
+    "node": ">=22"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",

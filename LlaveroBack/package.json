@@ -1,6 +1,10 @@
 {
   "name": "llavero-back",
   "version": "1.0.0",
+  "packageManager": "pnpm@11.22.0",
+  "engines": {
+    "node": ">=22"
+  },
   "description": "Backend Node.js para Sistema de Control de Llaves",
   "main": "src/server.js",
   "type": "commonjs",
