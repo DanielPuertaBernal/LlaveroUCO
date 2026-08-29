@@ -4,6 +4,7 @@ const { TABLES } = require('../../shared/db/tables');
 const { newId } = require('../../shared/db/id');
 const { applyPagination } = require('../../shared/utils/pagination.helper');
 const { normalizeLookupKey } = require('../../shared/utils/normalize.helper');
+const { horaEnBogota, minutosDelDiaEnBogota } = require('../../shared/utils/date.helper');
 const comunidadRepository = require('../comunidad/comunidad.repository');
 const salonRepository = require('../salones/salon.repository');
 const ApiError = require('../../shared/errors/api.error');
@@ -244,7 +245,7 @@ class ReservaRepository {
 
   async findReservaPendienteNFCByDocumento(documento, now = new Date()) {
     const fecha = new Date(now).toLocaleDateString('en-CA', { timeZone: ZONA_HORARIA_APP, year: 'numeric', month: '2-digit', day: '2-digit' });
-    const horaActual = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    const horaActual = horaEnBogota(now);
 
     const candidatas = await this._readQuery()
       .where('c_sol.numero_documento', String(documento))
@@ -258,7 +259,7 @@ class ReservaRepository {
 
     if (!candidatas.length) return null;
 
-    const ahoraMin = (now.getHours() * 60) + now.getMinutes();
+    const ahoraMin = minutosDelDiaEnBogota(now);
     let mejor = candidatas[0];
     let mejorScore = Number.POSITIVE_INFINITY;
     for (const reserva of candidatas) {

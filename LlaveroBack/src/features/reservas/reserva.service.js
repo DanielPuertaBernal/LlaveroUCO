@@ -7,6 +7,7 @@ const {
   UBICACIONES: { OFICINA: UBICACION_OFICINA },
 } = require('../../shared/constants/nfc.constants');
 const { createLogger } = require('../../shared/utils/logger');
+const { horaEnBogota, instanteEnBogota } = require('../../shared/utils/date.helper');
 
 /**
  * Fase S6 de la migración Mongo → Postgres — PRIORIDAD MÁXIMA (ver
@@ -159,7 +160,10 @@ class ReservaService {
       month: '2-digit',
       day: '2-digit',
     });
-    const horaActual = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    // `hoy` ya se resolvía en Bogotá; la hora leía el reloj local del proceso.
+    // En un contenedor UTC eso mezclaba el día de Bogotá con la hora de UTC y
+    // cerraba las reservas cinco horas antes de tiempo.
+    const horaActual = horaEnBogota(now);
     await this._bulkCompletarVencidas(hoy, horaActual);
   }
 
@@ -378,7 +382,7 @@ class ReservaService {
       throw ApiError.badRequest('La hora de fin debe ser posterior a la hora de inicio');
     }
 
-    const nuevaFechaFin = new Date(`${nuevaFechaStr}T${nuevoHoraFin}:00`);
+    const nuevaFechaFin = instanteEnBogota(nuevaFechaStr, nuevoHoraFin);
     if (!nuevaFechaFin || Number.isNaN(nuevaFechaFin.getTime()) || nuevaFechaFin <= now) {
       throw ApiError.badRequest('La nueva hora de fin no puede estar en el pasado');
     }
@@ -599,15 +603,11 @@ class ReservaService {
   }
 
   _fechaHoraInicioReserva(reserva) {
-    if (!reserva?.fecha || !reserva?.hora_inicio) return null;
-    const fechaHora = new Date(`${reserva.fecha}T${String(reserva.hora_inicio).slice(0, 5)}:00`);
-    return Number.isNaN(fechaHora.getTime()) ? null : fechaHora;
+    return instanteEnBogota(reserva?.fecha, reserva?.hora_inicio);
   }
 
   _fechaHoraFinReserva(reserva) {
-    if (!reserva?.fecha || !reserva?.hora_fin) return null;
-    const fechaHora = new Date(`${reserva.fecha}T${String(reserva.hora_fin).slice(0, 5)}:00`);
-    return Number.isNaN(fechaHora.getTime()) ? null : fechaHora;
+    return instanteEnBogota(reserva?.fecha, reserva?.hora_fin);
   }
 
   async _obtener(id) {

@@ -9,6 +9,8 @@ import dateHelper from '../src/shared/utils/date.helper.js';
 
 const {
   getDiaActual,
+  horaEnBogota,
+  instanteEnBogota,
   getFechaHoy,
   esReclamoAnticipado,
   calcularDuracionClase,
@@ -55,5 +57,22 @@ describe('helpers de hora bajo un proceso en UTC', () => {
 
     expect(getDiaActual()).toBe('Lunes');
     expect(getFechaHoy()).toBe('2026-03-02');
+  });
+
+  it('lee la hora del reloj de Bogotá, no la del proceso', () => {
+    expect(horaEnBogota(AHORA_0720_BOGOTA)).toBe('07:20');
+    expect(horaEnBogota(new Date('2026-03-03T02:30:00Z'))).toBe('21:30');
+  });
+
+  it('ancla una fecha y hora del negocio al instante absoluto de Bogotá', () => {
+    expect(instanteEnBogota('2026-03-02', '14:00').toISOString()).toBe('2026-03-02T19:00:00.000Z');
+    // Las horas de Postgres llegan como "HH:MM:SS"; el segundo sobra pero no debe romper.
+    expect(instanteEnBogota('2026-03-02', '14:00:00').toISOString()).toBe('2026-03-02T19:00:00.000Z');
+  });
+
+  it('devuelve null en vez de una fecha inválida cuando falta un dato', () => {
+    expect(instanteEnBogota('2026-03-02', '')).toBeNull();
+    expect(instanteEnBogota('', '14:00')).toBeNull();
+    expect(instanteEnBogota('2026-03-02', 'no es una hora')).toBeNull();
   });
 });

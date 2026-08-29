@@ -21,15 +21,37 @@ function fechaEnBogota(fecha = new Date()) {
   return fecha.toLocaleDateString('en-CA', { timeZone: TZ_BOGOTA });
 }
 
-/** Minutos transcurridos desde la medianoche de Bogotá para ese instante. */
-function minutosDelDiaEnBogota(fecha = new Date()) {
-  const hhmm = fecha.toLocaleTimeString('en-GB', {
+/** Hora del reloj de Bogotá ("HH:MM", 24h) para ese instante. */
+function horaEnBogota(fecha = new Date()) {
+  return fecha.toLocaleTimeString('en-GB', {
     timeZone: TZ_BOGOTA,
     hour12: false,
     hour: '2-digit',
     minute: '2-digit',
   });
-  return horaAMinutos(hhmm);
+}
+
+/** Minutos transcurridos desde la medianoche de Bogotá para ese instante. */
+function minutosDelDiaEnBogota(fecha = new Date()) {
+  return horaAMinutos(horaEnBogota(fecha));
+}
+
+/**
+ * Camino inverso: una fecha ("YYYY-MM-DD") y una hora ("HH:MM" o "HH:MM:SS")
+ * del negocio se leen COMO horario de Bogotá y se devuelven como instante
+ * absoluto. `new Date(`${fecha}T${hora}`)` sin offset las interpretaría en la
+ * zona local del proceso — en un contenedor UTC, una reserva de las 14:00
+ * quedaría anclada a las 09:00 de Bogotá.
+ * @returns {Date|null} null si falta la fecha o la hora no es parseable
+ */
+function instanteEnBogota(fechaStr, horaStr) {
+  const parsed = parseHora(horaStr);
+  if (!fechaStr || !parsed) return null;
+  const dia = String(fechaStr).slice(0, 10);
+  const hh = String(parsed.hours).padStart(2, '0');
+  const mm = String(parsed.minutes).padStart(2, '0');
+  const fecha = new Date(`${dia}T${hh}:${mm}:00-05:00`);
+  return Number.isNaN(fecha.getTime()) ? null : fecha;
 }
 
 /**
@@ -110,14 +132,8 @@ function horaAMinutos(horaStr) {
  * @returns {Date|null}
  */
 function anclarHoraFinADia(horaFinStr, fechaBase) {
-  const parsed = parseHora(horaFinStr);
-  if (!parsed) return null;
-  const fechaStr = fechaBase instanceof Date
-    ? fechaBase.toLocaleDateString('en-CA', { timeZone: 'America/Bogota' })
-    : String(fechaBase).slice(0, 10);
-  if (!fechaStr) return null;
-  const fecha = new Date(`${fechaStr}T${String(parsed.hours).padStart(2, '0')}:${String(parsed.minutes).padStart(2, '0')}:00-05:00`);
-  return Number.isNaN(fecha.getTime()) ? null : fecha;
+  const fechaStr = fechaBase instanceof Date ? fechaEnBogota(fechaBase) : fechaBase;
+  return instanteEnBogota(fechaStr, horaFinStr);
 }
 
 /**
@@ -309,7 +325,9 @@ function calcularTiempoRetrasoMinutos(horario, ahora = new Date()) {
 module.exports = {
   TZ_BOGOTA,
   fechaEnBogota,
+  horaEnBogota,
   minutosDelDiaEnBogota,
+  instanteEnBogota,
   getDiaActual,
   getFechaHoy,
   horaAMinutos,
