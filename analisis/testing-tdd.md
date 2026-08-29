@@ -14,12 +14,17 @@ Los pasos 1 a 4 de la secuencia de abajo están hechos. El backend tiene Vitest 
 - Escribir los tests destapó un bug real de zona horaria: seis helpers de fecha
   y varios call sites leían el reloj LOCAL del proceso para razonar sobre el
   horario académico, que siempre es Bogotá. Ver la sección "Zona horaria".
-- Frontend: sigue sin runner. Es el paso 5, pendiente.
-- Sin CI (`.github/workflows` no existe) y sin hooks pre-commit. Una suite que no
-  se ejecuta en PRs no protege nada; es el siguiente trabajo de infraestructura.
+- CI en `.github/workflows/ci.yml`: el backend corre en matriz `TZ`
+  (`America/Bogota` y `UTC`, la zona del contenedor de despliegue) y el frontend
+  hace lint + build. Siguen sin existir hooks pre-commit.
+- Frontend: sigue sin runner de tests. Es el paso 6, pendiente.
 - Backend: Node/CommonJS, Express 4, Knex/PostgreSQL, pnpm. Sin linter configurado.
-- Frontend: React 18 + Vite 5, ESLint 8 ya configurado. Lockfile duplicado
-  (`pnpm-lock.yaml` + `package-lock.json`, deuda no relacionada con testing).
+- Frontend: React 18 + Vite 5. ESLint 8 estaba instalado pero **sin archivo de
+  configuración** — `pnpm lint` fallaba con "couldn't find a configuration file",
+  o sea que nunca había corrido. Ya tiene `.eslintrc.cjs`, cero errores y 27
+  advertencias de `exhaustive-deps` topadas en CI con `--max-warnings`.
+- El lockfile duplicado de `LlaveroFront` (pnpm + npm) se resolvió: se eliminó
+  `package-lock.json` y se fijó `packageManager: pnpm@11.22.0` en ambos paquetes.
 
 ## Objetivos de mayor valor para empezar (backend)
 
@@ -107,13 +112,10 @@ El refactor de duplicación de hooks CRUD del frontend (`createCrudResource()`) 
 
 ## Siguiente paso
 
-Dos frentes, en este orden:
+**Frontend con Vitest + RTL** (paso 6 de la secuencia). Es lo único de riesgo
+alto que queda: el backend ya tiene red y CI la ejecuta, el frontend no tiene
+ninguna cobertura, y la deuda de duplicación que hay ahí (la búsqueda de persona
+repetida en siete páginas) no se puede tocar sin ella.
 
-1. **CI.** Hay 139 tests y nada que los ejecute en un PR. Un workflow que corra
-   `pnpm test` en `LlaveroBack` es lo que convierte la suite en una red de
-   verdad. Correrlo con `TZ=UTC` además del default, ya que es la zona del
-   contenedor de despliegue.
-2. **Frontend** — Vitest + RTL (paso 6 de la secuencia).
-
-Los tests de repositorio (paso 5) siguen requiriendo una base desechable y
-quedan después de los dos anteriores.
+Después, en orden: bajar las 27 advertencias de `exhaustive-deps`, y los tests
+de repositorio (paso 5), que siguen requiriendo una base desechable.

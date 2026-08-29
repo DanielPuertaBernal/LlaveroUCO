@@ -6,9 +6,9 @@ Estado verificado contra el código y la base, no contra la auditoría original.
 
 | Hallazgo | Riesgo | Dónde |
 |---|---|---|
-| **Cero cobertura de tests** en los dos repos: no hay archivos de test ni script `test` en ningún `package.json` | Alto | todo el proyecto |
+| **Frontend sin cobertura de tests**: no hay runner ni archivos de test en `LlaveroFront` (el backend ya tiene 139) | Alto | `LlaveroFront` |
 | Lógica de solapamiento de horarios duplicada entre `reservas` y `reservas_semestrales`, más una tercera lectura en `notificacion.scheduler` | Medio | `reserva.service.js`, `reservas_semestrales.service.js` |
-| Búsqueda de persona por documento/carnet repetida en cuatro páginas, con orden de resolución distinto en cada una | Medio | `PrestamosPage`, `MonitoresPage`, `ReservasPage`, `ReservasSemestralesPage` |
+| Búsqueda de persona por documento/carnet repetida en siete páginas, con orden de resolución distinto en cada una | Medio | `PrestamosPage`, `MonitoresPage`, `ReservasPage`, `ReservasSemestralesPage`, `ProgramacionPage`, `HistorialPage`, `ComunidadPage` |
 | Bypass de capas: varios repositorios consultan tablas de otros features en vez de pasar por el repositorio dueño | Medio | ver `llaves.md` §7, `reservas_semestrales.md` §6 |
 | `configuracion_bloques` sin CHECK: el tope de `max(1440)` minutos vive solo en Zod | Bajo | un seed o script puede dejar valores fuera de rango |
 | `validarOperacion` en `ubicacion.service.js` es código muerto y aparenta ser un gate de autorización | Bajo | ver [catálogos](./backend/catalogos.md) §4 |
@@ -19,6 +19,11 @@ Estado verificado contra el código y la base, no contra la auditoría original.
 
 | Hallazgo original | Qué pasó |
 |---|---|
+| Cero cobertura de tests en backend | Vitest + supertest; 139 tests en 7 archivos, ver [testing-tdd.md](./testing-tdd.md). Falta el frontend, que sigue abierto arriba |
+| Sin CI: nada ejecutaba la suite en un PR | `.github/workflows/ci.yml` — backend en matriz `TZ` (`America/Bogota` y `UTC`), frontend lint + build |
+| `pnpm lint` roto en el frontend: script y plugins instalados, sin archivo de configuración | `LlaveroFront/.eslintrc.cjs`; los 19 errores corregidos, las 27 advertencias de `exhaustive-deps` topadas en CI |
+| Lockfile duplicado en `LlaveroFront` (pnpm + npm) | `package-lock.json` eliminado e ignorado; `packageManager` y `engines` fijados en ambos paquetes |
+| Horario académico leído con el reloj local del proceso | `date.helper.js` es la única fuente de verdad de zona horaria; ver la sección "Zona horaria" en [testing-tdd.md](./testing-tdd.md) |
 | Sin transacciones en `llaves` | `knex.transaction()` en `llave.write-model.js` y `llave.workflows.js` |
 | `POST /api/comunidad/sync` público | Protegido con `requireApiKey('COMUNIDAD_SYNC_API_KEY')` + `syncLimiter` |
 | Autorización ADMIN solo en cliente | `requireAdmin` en las rutas de `novedades` y `usuarios` |
@@ -45,8 +50,8 @@ Desapareció con el retiro del gateway NFC y los lectores ESP32:
 
 ## Priorización sugerida
 
-1. **Tests.** Es el único item de riesgo alto que queda y bloquea todo lo demás: sin red, cualquier unificación de lógica duplicada se hace a ciegas. Empezar por `llaves` y `prestamos`, que son los de concurrencia real.
-2. Unificar la búsqueda de persona en un hook compartido — cuatro copias con criterios distintos ya produjeron un bug (buscar por documento antes que por carnet devolvía la persona equivocada).
+1. **Tests del frontend.** El backend ya tiene red (139 tests en CI); el frontend no tiene ninguna. Es el único item de riesgo alto que queda y bloquea lo demás: sin cobertura, unificar lógica duplicada en siete páginas se hace a ciegas.
+2. Unificar la búsqueda de persona en un hook compartido — siete copias con criterios distintos ya produjeron un bug (buscar por documento antes que por carnet devolvía la persona equivocada). Requiere el punto 1 primero.
 3. Unificar el solapamiento de horarios.
 4. Cerrar el bypass de capas.
 5. Borrar `validarOperacion` y las columnas muertas.
