@@ -11,6 +11,7 @@ const {
   getDiaActual,
   horaEnBogota,
   instanteEnBogota,
+  rangoDelDiaEnBogota,
   getFechaHoy,
   esReclamoAnticipado,
   calcularDuracionClase,
@@ -74,5 +75,36 @@ describe('helpers de hora bajo un proceso en UTC', () => {
     expect(instanteEnBogota('2026-03-02', '')).toBeNull();
     expect(instanteEnBogota('', '14:00')).toBeNull();
     expect(instanteEnBogota('2026-03-02', 'no es una hora')).toBeNull();
+  });
+
+  it('abre y cierra el día calendario de Bogotá, no el del proceso', () => {
+    const [inicio, fin] = rangoDelDiaEnBogota('2026-03-02');
+
+    expect(inicio.toISOString()).toBe('2026-03-02T05:00:00.000Z');
+    expect(fin.toISOString()).toBe('2026-03-03T04:59:59.999Z');
+  });
+
+  it('encierra los bordes reales del día y deja fuera los del día vecino', () => {
+    const [inicio, fin] = rangoDelDiaEnBogota('2026-03-02');
+    const dentroTemprano = new Date('2026-03-02T05:00:00Z');   // 00:00 en Bogotá
+    const dentroTarde = new Date('2026-03-03T04:59:00Z');      // 23:59 en Bogotá
+    const diaAnterior = new Date('2026-03-02T04:59:00Z');      // 23:59 del día 1
+    const diaSiguiente = new Date('2026-03-03T05:00:00Z');     // 00:00 del día 3
+
+    expect(dentroTemprano >= inicio && dentroTemprano <= fin).toBe(true);
+    expect(dentroTarde >= inicio && dentroTarde <= fin).toBe(true);
+    expect(diaAnterior >= inicio).toBe(false);
+    expect(diaSiguiente <= fin).toBe(false);
+  });
+
+  it('acepta un timestamp ISO completo y se queda con su día', () => {
+    const [inicio] = rangoDelDiaEnBogota('2026-03-02T18:45:00.000Z');
+    expect(inicio.toISOString()).toBe('2026-03-02T05:00:00.000Z');
+  });
+
+  it('devuelve null cuando la fecha no sirve, en vez de un rango inválido', () => {
+    expect(rangoDelDiaEnBogota('')).toBeNull();
+    expect(rangoDelDiaEnBogota(null)).toBeNull();
+    expect(rangoDelDiaEnBogota('no es una fecha')).toBeNull();
   });
 });

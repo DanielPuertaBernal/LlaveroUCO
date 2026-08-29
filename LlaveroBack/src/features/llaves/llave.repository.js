@@ -4,6 +4,7 @@ const { TABLES } = require('../../shared/db/tables');
 const { newId } = require('../../shared/db/id');
 const { applyPagination } = require('../../shared/utils/pagination.helper');
 const ApiError = require('../../shared/errors/api.error');
+const { rangoDelDiaEnBogota } = require('../../shared/utils/date.helper');
 const comunidadRepository = require('../comunidad/comunidad.repository');
 const salonRepository = require('../salones/salon.repository');
 const ubicacionRepository = require('../ubicaciones/ubicacion.repository');
@@ -150,9 +151,9 @@ class LlaveRepository {
 
   /** @param {string} fechaStr - Formato YYYY-MM-DD @returns {Promise<object[]>} */
   async findByFecha(fechaStr) {
-    const start = new Date(`${fechaStr}T00:00:00`);
-    const end = new Date(`${fechaStr}T23:59:59.999`);
-    return this._readQuery().whereBetween(`${TABLES.REGISTROS_LLAVES}.fecha_hora_entrega`, [start, end]);
+    const rango = rangoDelDiaEnBogota(fechaStr);
+    if (!rango) throw ApiError.badRequest(`Fecha inválida: ${fechaStr}`);
+    return this._readQuery().whereBetween(`${TABLES.REGISTROS_LLAVES}.fecha_hora_entrega`, rango);
   }
 
   /**
@@ -161,11 +162,11 @@ class LlaveRepository {
    * @returns {Promise<object[]>}
    */
   async findPendientesByFecha(fechaStr, filtroUsuarioId = null) {
-    const start = new Date(`${fechaStr}T00:00:00`);
-    const end = new Date(`${fechaStr}T23:59:59.999`);
+    const rango = rangoDelDiaEnBogota(fechaStr);
+    if (!rango) throw ApiError.badRequest(`Fecha inválida: ${fechaStr}`);
     const query = this._readQuery()
       .whereIn(`${TABLES.REGISTROS_LLAVES}.estado`, ['en_prestamo', 'en_mora', 'demora_entrega'])
-      .andWhereBetween(`${TABLES.REGISTROS_LLAVES}.fecha_hora_entrega`, [start, end]);
+      .andWhereBetween(`${TABLES.REGISTROS_LLAVES}.fecha_hora_entrega`, rango);
     if (filtroUsuarioId) {
       query.andWhere(`${TABLES.REGISTROS_LLAVES}.gestionado_por_usuario_id`, filtroUsuarioId);
     }
@@ -176,9 +177,9 @@ class LlaveRepository {
   async findHistorial(filters = {}, pagination = null) {
     const query = this._readQuery();
     if (filters.fecha) {
-      const start = new Date(`${filters.fecha}T00:00:00`);
-      const end = new Date(`${filters.fecha}T23:59:59.999`);
-      query.whereBetween(`${TABLES.REGISTROS_LLAVES}.fecha_hora_entrega`, [start, end]);
+      const rango = rangoDelDiaEnBogota(filters.fecha);
+      if (!rango) throw ApiError.badRequest(`Fecha inválida: ${filters.fecha}`);
+      query.whereBetween(`${TABLES.REGISTROS_LLAVES}.fecha_hora_entrega`, rango);
     }
     if (filters.documento) query.andWhere('c_reg.numero_documento', String(filters.documento));
     if (filters.estado) query.andWhere(`${TABLES.REGISTROS_LLAVES}.estado`, filters.estado);

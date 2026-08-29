@@ -3,6 +3,15 @@ const pgClient = require('../../shared/db/pg.client');
 const { TABLES } = require('../../shared/db/tables');
 const { newId } = require('../../shared/db/id');
 const { applyPagination } = require('../../shared/utils/pagination.helper');
+const ApiError = require('../../shared/errors/api.error');
+const { rangoDelDiaEnBogota } = require('../../shared/utils/date.helper');
+
+/** Rango del día de Bogotá, o 400 si la fecha del filtro no es parseable. */
+function rangoDelDia(fechaStr) {
+  const rango = rangoDelDiaEnBogota(fechaStr);
+  if (!rango) throw ApiError.badRequest(`Fecha inválida: ${fechaStr}`);
+  return rango;
+}
 const salonRepository = require('../salones/salon.repository');
 
 /**
@@ -93,10 +102,10 @@ class NotificacionRepository {
 
   async findHistorial(filters = {}, pagination = null) {
     const query = this._readQuery();
-    if (filters.fecha) query.andWhereBetween('fecha_envio', [new Date(`${filters.fecha}T00:00:00`), new Date(`${filters.fecha}T23:59:59.999`)]);
+    if (filters.fecha) query.andWhereBetween('fecha_envio', rangoDelDia(filters.fecha));
     if (filters.desde || filters.hasta) {
-      const desde = filters.desde ? new Date(`${filters.desde}T00:00:00`) : new Date(0);
-      const hasta = filters.hasta ? new Date(`${filters.hasta}T23:59:59.999`) : new Date();
+      const desde = filters.desde ? rangoDelDia(filters.desde)[0] : new Date(0);
+      const hasta = filters.hasta ? rangoDelDia(filters.hasta)[1] : new Date();
       query.andWhereBetween('fecha_envio', [desde, hasta]);
     }
     if (filters.documento) query.andWhere('destinatario_documento', filters.documento);

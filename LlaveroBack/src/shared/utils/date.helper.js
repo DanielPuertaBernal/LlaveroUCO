@@ -94,6 +94,26 @@ function getFechaHoy() {
 }
 
 /**
+ * Bordes del día calendario de Bogotá para una fecha "YYYY-MM-DD" (acepta un
+ * ISO completo y se queda con su parte de fecha), como par [inicio, fin] de
+ * instantes absolutos. Sin el offset explícito, `new Date(`${fecha}T00:00:00`)`
+ * abre el día en la zona del proceso: en UTC el rango se corre cinco horas y
+ * un reporte "de hoy" arrastra la madrugada del día siguiente.
+ *
+ * El cierre es 23:59:59.999 y no la medianoche siguiente porque los filtros
+ * que lo consumen usan `whereBetween`, que es inclusivo en ambos extremos.
+ * @param {string} fechaStr
+ * @returns {[Date, Date]|null} null si la fecha no es parseable
+ */
+function rangoDelDiaEnBogota(fechaStr) {
+  const dia = String(fechaStr ?? '').slice(0, 10);
+  const inicio = new Date(`${dia}T00:00:00.000-05:00`);
+  const fin = new Date(`${dia}T23:59:59.999-05:00`);
+  if (Number.isNaN(inicio.getTime()) || Number.isNaN(fin.getTime())) return null;
+  return [inicio, fin];
+}
+
+/**
  * Parsea una hora en formato "HH:MM" o "HH:MM:SS" y retorna objeto {hours, minutes}
  * @param {string} horaStr
  * @returns {{hours: number, minutes: number} | null}
@@ -328,6 +348,7 @@ module.exports = {
   horaEnBogota,
   minutosDelDiaEnBogota,
   instanteEnBogota,
+  rangoDelDiaEnBogota,
   getDiaActual,
   getFechaHoy,
   horaAMinutos,

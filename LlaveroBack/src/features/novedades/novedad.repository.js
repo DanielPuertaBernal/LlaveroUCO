@@ -3,6 +3,15 @@ const pgClient = require('../../shared/db/pg.client');
 const { TABLES } = require('../../shared/db/tables');
 const { newId } = require('../../shared/db/id');
 const { applyPagination } = require('../../shared/utils/pagination.helper');
+const ApiError = require('../../shared/errors/api.error');
+const { rangoDelDiaEnBogota } = require('../../shared/utils/date.helper');
+
+/** Borde del día de Bogotá: `extremo` 0 = apertura, 1 = cierre. */
+function bordeDelDia(fechaStr, extremo) {
+  const rango = rangoDelDiaEnBogota(fechaStr);
+  if (!rango) throw ApiError.badRequest(`Fecha inválida: ${fechaStr}`);
+  return rango[extremo];
+}
 const comunidadRepository = require('../comunidad/comunidad.repository');
 const salonRepository = require('../salones/salon.repository');
 const elementoAfectadoService = require('../elementos-afectados/elementoAfectado.service');
@@ -166,8 +175,8 @@ class NovedadRepository {
           .orWhereILike('ea.nombre', b)
       );
     }
-    if (filters.desde) query.andWhere(`${TABLES.NOVEDADES}.fecha_reporte`, '>=', new Date(`${filters.desde}T00:00:00`));
-    if (filters.hasta) query.andWhere(`${TABLES.NOVEDADES}.fecha_reporte`, '<=', new Date(`${filters.hasta}T23:59:59.999`));
+    if (filters.desde) query.andWhere(`${TABLES.NOVEDADES}.fecha_reporte`, '>=', bordeDelDia(filters.desde, 0));
+    if (filters.hasta) query.andWhere(`${TABLES.NOVEDADES}.fecha_reporte`, '<=', bordeDelDia(filters.hasta, 1));
     query.orderBy(`${TABLES.NOVEDADES}.fecha_reporte`, 'desc');
     return applyPagination(query, pagination);
   }
