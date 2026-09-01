@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import { Activity, Building2, FileSpreadsheet, Filter, Info, Moon, Percent, Search, Sun, Users } from 'lucide-react';
 import { useOcupacion, useDetalleAulaDia } from './ocupacionApi';
 import { useSemestres } from '@/features/programacion/programacionApi';
@@ -209,6 +209,8 @@ export default function OcupacionPage() {
   const [detalleDocente, setDetalleDocente] = useState(null);
   const [detalleDocenteTab, setDetalleDocenteTab] = useState('materias');
   const [franjaDetalle, setFranjaDetalle] = useState(null); // { aula, dia }
+  // Qué KPI se abrió en el modal de desglose: 'global' | 'diurna' | 'nocturna'.
+  const [kpiDetalle, setKpiDetalle] = useState(null);
   const [mostrarExplicacion86h, setMostrarExplicacion86h] = useState(false);
   const { data: clasesFranja = [], isLoading: cargandoFranja } = useDetalleAulaDia(
     franjaDetalle?.aula, franjaDetalle?.dia, semestre || undefined
@@ -272,8 +274,17 @@ export default function OcupacionPage() {
 
   // Con una facultad filtrada, la tabla debe mostrar solo las horas que ESA
   // facultad ocupa en el aula, no el total del aula (todas las facultades).
-  const horasDiurna = (a, d) => (facultad !== 'ALL' && a.porFacultad?.[facultad] ? a.porFacultad[facultad].diurna[d] : a.diurna[d]) || 0;
-  const horasNocturna = (a, d) => (facultad !== 'ALL' && a.porFacultad?.[facultad] ? a.porFacultad[facultad].nocturna[d] : a.nocturna[d]) || 0;
+  // `useCallback` para que los useMemo de abajo puedan declararlas como
+  // dependencia en vez de capturarlas en silencio: sin identidad estable,
+  // listarlas obligaría a recalcular todo en cada render.
+  const horasDiurna = useCallback(
+    (a, d) => (facultad !== 'ALL' && a.porFacultad?.[facultad] ? a.porFacultad[facultad].diurna[d] : a.diurna[d]) || 0,
+    [facultad]
+  );
+  const horasNocturna = useCallback(
+    (a, d) => (facultad !== 'ALL' && a.porFacultad?.[facultad] ? a.porFacultad[facultad].nocturna[d] : a.nocturna[d]) || 0,
+    [facultad]
+  );
 
   // Docentes con carga en al menos un aula del bloque filtrado (si hay uno) y
   // que dictan en la facultad filtrada (si hay una) — mismo criterio de
@@ -334,7 +345,76 @@ export default function OcupacionPage() {
       horasDiurna: sumDiurna,
       horasNocturna: sumNocturna,
     };
-  }, [aulasFiltradas, facultad]);
+  }, [aulasFiltradas, horasDiurna, horasNocturna]);
+
+  /**
+   * Desglose del KPI abierto. Un porcentaje global esconde exactamente lo que
+   * hace falta para decidir: un 2,50% nocturno no dice qué aulas están vacías
+   * ni qué noches. Se calcula sobre `aulasFiltradas`, el mismo conjunto que
+   * alimenta los KPIs, así que el total de acá siempre cuadra con la tarjeta.
+   */
+  const desgloseKpi = useMemo(() => {
+    if (!kpiDetalle || !aulasFiltradas.length) return null;
+
+    const horasDe = (a, d) => {
+      if (kpiDetalle === 'diurna') return horasDiurna(a, d);
+      if (kpiDetalle === 'nocturna') return horasNocturna(a, d);
+      return horasDiurna(a, d) + horasNocturna(a, d);
+    };
+    // El sábado no tiene jornada nocturna; la diurna sí cubre los seis días.
+    const capacidadDia = (d) => {
+      const diurna = HOURS_DIURNA_MF;
+      const nocturna = d === 'SABADO' ? 0 : HOURS_NOCTURNA_MF;
+      if (kpiDetalle === 'diurna') return diurna;
+      if (kpiDetalle === 'nocturna') return nocturna;
+      return diurna + nocturna;
+    };
+
+    const capPorAula = DIAS.reduce((acc, d) => acc + capacidadDia(d), 0);
+    const nAulas = aulasFiltradas.length;
+
+    const porAula = aulasFiltradas
+      .map(([nombre, a]) => {
+        const ocupadas = DIAS.reduce((acc, d) => acc + horasDe(a, d), 0);
+        return {
+          nombre,
+          bloque: a.bloque || '',
+          ocupadas,
+          libres: capPorAula - ocupadas,
+          pct: capPorAula > 0 ? (ocupadas / capPorAula) * 100 : 0,
+        };
+      })
+      // Las más vacías primero: son las que se pueden asignar.
+      .sort((x, y) => y.libres - x.libres || x.nombre.localeCompare(y.nombre));
+
+    const porDia = DIAS.map((d) => {
+      const cap = capacidadDia(d) * nAulas;
+      const ocupadas = aulasFiltradas.reduce((acc, [, a]) => acc + horasDe(a, d), 0);
+      return {
+        dia: d,
+        label: DIAS_LABEL[d],
+        ocupadas,
+        libres: cap - ocupadas,
+        cap,
+        pct: cap > 0 ? (ocupadas / cap) * 100 : 0,
+      };
+    });
+
+    const capTotal = capPorAula * nAulas;
+    const ocupadasTotal = porAula.reduce((acc, r) => acc + r.ocupadas, 0);
+
+    return {
+      capPorAula,
+      capTotal,
+      ocupadasTotal,
+      libresTotal: capTotal - ocupadasTotal,
+      pct: capTotal > 0 ? (ocupadasTotal / capTotal) * 100 : 0,
+      nAulas,
+      aulasVacias: porAula.filter((r) => r.ocupadas === 0).length,
+      porAula,
+      porDia,
+    };
+  }, [kpiDetalle, aulasFiltradas, horasDiurna, horasNocturna]);
 
   // Rankings para el panel de gráficos: top aulas más ocupadas, ocupación
   // promedio por bloque, y horas totales por facultad — todo sobre el mismo
@@ -398,7 +478,7 @@ export default function OcupacionPage() {
       : [];
 
     return { topAulas, porBloque, porFacultad, porAulaDelBloque };
-  }, [aulasFiltradas, facultad]);
+  }, [aulasFiltradas, horasDiurna, horasNocturna]);
 
   async function handleExport() {
     try {
@@ -501,7 +581,7 @@ export default function OcupacionPage() {
       {/* KPIs + Filtros unificados en un solo panel */}
       <div className="bg-card border border-border rounded-xl p-4 space-y-4">
         <div className="flex flex-wrap gap-6">
-          <div className="flex items-center gap-3">
+          <button type="button" onClick={() => setKpiDetalle('global')} className="flex items-center gap-3 text-left rounded-lg -m-1 p-1 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" title="Ver desglose por aula y por día">
             <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
               <Percent className="h-5 w-5 text-primary" />
             </div>
@@ -512,8 +592,8 @@ export default function OcupacionPage() {
                 {fmtPct(kpiGlobal.aporteDiurna)} diurna + {fmtPct(kpiGlobal.aporteNocturna)} nocturna
               </p>
             </div>
-          </div>
-          <div className="flex items-center gap-3">
+          </button>
+          <button type="button" onClick={() => setKpiDetalle('diurna')} className="flex items-center gap-3 text-left rounded-lg -m-1 p-1 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" title="Ver desglose por aula y por día">
             <div className="h-10 w-10 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
               <Sun className="h-5 w-5 text-amber-600 dark:text-amber-400" />
             </div>
@@ -524,8 +604,8 @@ export default function OcupacionPage() {
                 {fmtH(kpiGlobal.horasDiurna)}h sobre {WEEKLY_DIURNA}h/aula
               </p>
             </div>
-          </div>
-          <div className="flex items-center gap-3">
+          </button>
+          <button type="button" onClick={() => setKpiDetalle('nocturna')} className="flex items-center gap-3 text-left rounded-lg -m-1 p-1 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" title="Ver desglose por aula y por día">
             <div className="h-10 w-10 rounded-lg bg-indigo-500/10 flex items-center justify-center shrink-0">
               <Moon className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
             </div>
@@ -536,7 +616,7 @@ export default function OcupacionPage() {
                 {fmtH(kpiGlobal.horasNocturna)}h sobre {WEEKLY_NOCTURNA}h/aula
               </p>
             </div>
-          </div>
+          </button>
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
               <Building2 className="h-5 w-5 text-primary" />
@@ -962,6 +1042,102 @@ export default function OcupacionPage() {
       )}
 
       {/* Detalle de estudiantes por aula (doble click en una fila) */}
+      {/* Desglose del KPI: qué hay detrás del porcentaje de la tarjeta. */}
+      <Sheet open={!!kpiDetalle} onOpenChange={(v) => !v && setKpiDetalle(null)}>
+        <SheetContent className="max-w-3xl">
+          {desgloseKpi && (() => {
+            const TITULOS = {
+              global: 'Ocupación global',
+              diurna: 'Jornada diurna 7:00-18:00',
+              nocturna: 'Jornada nocturna 18:00-22:00',
+            };
+            const pctLibre = 100 - desgloseKpi.pct;
+            return (
+              <>
+                <SheetHeader>
+                  <SheetTitle>{TITULOS[kpiDetalle]}</SheetTitle>
+                  <SheetDescription>
+                    {desgloseKpi.nAulas} aula{desgloseKpi.nAulas === 1 ? '' : 's'} ·{' '}
+                    {fmtH(desgloseKpi.capPorAula)}h disponibles por aula a la semana
+                    {facultad !== 'ALL' && <> · facultad <strong>{facultad}</strong></>}
+                  </SheetDescription>
+                </SheetHeader>
+
+                <div className="grid grid-cols-3 gap-3 my-4">
+                  <div className="rounded-lg border border-border p-3">
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide">Ocupado</p>
+                    <p className="text-xl font-bold">{fmtPct(desgloseKpi.pct)}</p>
+                    <p className="text-[11px] text-muted-foreground">{fmtH(desgloseKpi.ocupadasTotal)}h</p>
+                  </div>
+                  <div className="rounded-lg border border-emerald-600/40 bg-emerald-500/10 p-3">
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide">Libre</p>
+                    <p className="text-xl font-bold text-emerald-700 dark:text-emerald-400">{fmtPct(pctLibre)}</p>
+                    <p className="text-[11px] text-muted-foreground">{fmtH(desgloseKpi.libresTotal)}h de {fmtH(desgloseKpi.capTotal)}h</p>
+                  </div>
+                  <div className="rounded-lg border border-border p-3">
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide">Aulas sin uso</p>
+                    <p className="text-xl font-bold">{desgloseKpi.aulasVacias}</p>
+                    <p className="text-[11px] text-muted-foreground">de {desgloseKpi.nAulas} en esta jornada</p>
+                  </div>
+                </div>
+
+                <h4 className="text-sm font-semibold mb-2">Por día</h4>
+                <div className="flex gap-2 mb-5 flex-wrap">
+                  {desgloseKpi.porDia.map((d) => (
+                    <div
+                      key={d.dia}
+                      className={`flex-1 min-w-[72px] rounded-lg border p-2 text-center ${d.cap === 0 ? 'border-border opacity-50' : heatmapClass(d.pct)}`}
+                      title={d.cap === 0 ? 'Sin jornada este día' : `${fmtH(d.libres)}h libres de ${fmtH(d.cap)}h`}
+                    >
+                      <p className="text-[11px] font-medium">{d.label}</p>
+                      <p className="text-sm font-bold">{d.cap === 0 ? '—' : fmtPct(d.pct)}</p>
+                      <p className="text-[10px]">{d.cap === 0 ? 'sin jornada' : `${fmtH(d.libres)}h libres`}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <h4 className="text-sm font-semibold mb-2">Por aula</h4>
+                <p className="text-xs text-muted-foreground mb-2">
+                  Ordenadas por horas libres: las de arriba son las que quedan disponibles para asignar.
+                </p>
+                <div className="overflow-x-auto rounded-lg border border-border">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/50">
+                      <tr>
+                        <th className="text-left p-2 font-medium">Aula</th>
+                        <th className="text-left p-2 font-medium">Bloque</th>
+                        <th className="text-right p-2 font-medium">Ocupadas</th>
+                        <th className="text-right p-2 font-medium">Libres</th>
+                        <th className="text-right p-2 font-medium">Ocupación</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {desgloseKpi.porAula.map((r) => (
+                        <tr key={r.nombre} className="border-t border-border">
+                          <td className="p-2">
+                            <button
+                              type="button"
+                              className="text-primary hover:underline"
+                              onClick={() => { setKpiDetalle(null); setDetalleAula(r.nombre); }}
+                            >
+                              {r.nombre}
+                            </button>
+                          </td>
+                          <td className="p-2 text-muted-foreground">{r.bloque || '—'}</td>
+                          <td className="p-2 text-right">{fmtH(r.ocupadas)}h</td>
+                          <td className="p-2 text-right font-medium text-emerald-700 dark:text-emerald-400">{fmtH(r.libres)}h</td>
+                          <td className="p-2 text-right">{fmtPct(r.pct)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            );
+          })()}
+        </SheetContent>
+      </Sheet>
+
       <Sheet open={!!detalleAula} onOpenChange={(v) => !v && setDetalleAula(null)}>
         <SheetContent className="max-w-2xl">
           {detalleAula && aulas[detalleAula] && (() => {

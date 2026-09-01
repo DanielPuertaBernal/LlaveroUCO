@@ -64,9 +64,9 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # `--max-warnings` deja pasar las 27 advertencias de exhaustive-deps que
+      # `--max-warnings` deja pasar las 25 advertencias de exhaustive-deps que
       # ya existían y bloquea cualquier nueva. Bajar este número a medida que
       # se resuelvan; nunca subirlo.
-      - run: pnpm lint --max-warnings 27
+      - run: pnpm lint --max-warnings 25
 
       - run: pnpm build
