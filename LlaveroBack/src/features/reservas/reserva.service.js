@@ -271,9 +271,17 @@ class ReservaService {
             reserva_hora_inicio: reserva.hora_inicio,
             reserva_hora_fin: reserva.hora_fin,
           });
-        } catch (_) {
-          // no bloquear el flujo principal si falla la notificación (incluye
-          // 23505 de duplicado, comportamiento esperado)
+        } catch (err) {
+          // No bloquear el flujo principal si falla la notificación, pero
+          // dejar rastro: este catch era mudo y por eso una notificación que
+          // no se creaba pasaba inadvertida hasta que alguien intentaba
+          // descartarla días después. El 23505 es duplicado y es esperado.
+          if (err?.code !== '23505') {
+            logger.error('No se pudo encolar la notificación de reserva no reclamada', {
+              reservaId: reserva.id,
+              error: err?.message,
+            });
+          }
         }
       }
     }
@@ -281,7 +289,13 @@ class ReservaService {
 
   async listar(filters, pagination) {
     await this.sincronizarEstadosVencidos();
-    const resultado = await reservaRepository.findHistorial(filters, pagination);
+    // La bandeja de "sin reclamar" es una lista de pendientes por resolver:
+    // lo ya descartado sale de ahí, pero sigue existiendo como `no_reclamada`
+    // en el historial y en los reportes.
+    const filtrosEfectivos = filters?.estado === 'no_reclamada'
+      ? { ...filters, sin_descartar: true }
+      : filters;
+    const resultado = await reservaRepository.findHistorial(filtrosEfectivos, pagination);
 
     // Enriquecer con correo de comunidad cuando se listan reservas no reclamadas
     if (filters?.estado === 'no_reclamada') {

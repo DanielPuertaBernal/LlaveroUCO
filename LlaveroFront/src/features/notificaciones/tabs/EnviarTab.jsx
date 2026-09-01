@@ -32,6 +32,9 @@ const ASUNTO_RESERVA_DEFAULT = 'Reserva cerrada - Llave no reclamada - Llavero';
 
 const TABS = { LLAVES: 'llaves', RESERVAS: 'reservas' };
 
+/** Postgres devuelve `time` como "HH:MM:SS"; la app muestra HH:MM. */
+const hhmm = (h) => String(h ?? '').slice(0, 5);
+
 function calcularTiempoTranscurrido(fechaEntrega, horario) {
   if (!fechaEntrega || !horario) return '-';
   const partes = horario.toUpperCase().split(' A ');
@@ -549,14 +552,21 @@ export default function EnviarTab() {
       ),
     },
     { key: 'solicitante_nombre', label: 'Solicitante' },
-    { key: 'documento', label: 'Documento' },
+    // La API expone estos campos como `solicitante_documento` y como
+    // `hora_inicio`/`hora_fin` por separado; las claves `documento` y
+    // `horario` no existen en la respuesta y por eso la tabla mostraba "—".
+    { key: 'solicitante_documento', label: 'Documento' },
     { key: 'nombre_salon', label: 'Salon' },
     {
       key: 'fecha',
       label: 'Fecha',
       render: (v) => v ? new Date(v).toLocaleDateString('es-CO') : '-',
     },
-    { key: 'horario', label: 'Horario' },
+    {
+      key: 'hora_inicio',
+      label: 'Horario',
+      render: (v, row) => (v && row.hora_fin ? `${hhmm(v)} - ${hhmm(row.hora_fin)}` : '—'),
+    },
     {
       key: '_descartar',
       label: 'Descartar',

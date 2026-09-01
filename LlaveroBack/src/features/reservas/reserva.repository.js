@@ -194,6 +194,10 @@ class ReservaRepository {
     if (filters.nombre_bloque) query.andWhere(`${TABLES.BLOQUES}.nombre_bloque`, filters.nombre_bloque);
     if (filters.nombre_salon) query.andWhere(`${TABLES.SALONES}.nombre_salon`, filters.nombre_salon);
     if (filters.estado) query.andWhere(`${TABLES.RESERVAS}.estado`, filters.estado);
+    // La bandeja de "sin reclamar" pide acción: una reserva ya descartada
+    // sigue siendo `no_reclamada` para cualquier reporte, pero no vuelve a
+    // aparecer acá.
+    if (filters.sin_descartar) query.whereNull(`${TABLES.RESERVAS}.notificacion_descartada_at`);
     if (filters.solicitante_documento) query.andWhere('c_sol.numero_documento', String(filters.solicitante_documento));
     if (filters.fecha) query.andWhere(`${TABLES.RESERVAS}.fecha`, filters.fecha);
     if (filters.busqueda) {
@@ -227,6 +231,18 @@ class ReservaRepository {
   }
 
   /** Todas las reservas activas (pendiente/aprobada) — usado por `bulkCompletarVencidas`. */
+  /** Marca la reserva como "no notificar". Idempotente: repetirlo no cambia nada. */
+  async marcarNotificacionDescartada(id, usuarioId = null) {
+    return this.db(TABLES.RESERVAS)
+      .where({ id })
+      .whereNull('notificacion_descartada_at')
+      .update({
+        notificacion_descartada_at: new Date(),
+        notificacion_descartada_por_usuario_id: usuarioId,
+        updated_at: new Date(),
+      });
+  }
+
   async findActivas() {
     return this._readQuery().whereIn(`${TABLES.RESERVAS}.estado`, ['pendiente', 'aprobada']);
   }

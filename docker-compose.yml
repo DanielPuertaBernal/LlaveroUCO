@@ -72,6 +72,12 @@ services:
       # stays correct for host-run processes at the same time.
       PGHOST: postgres
       PGPORT: 5432
+      # Mismo motivo que PGHOST/PGPORT: el `.env` de la raíz describe la vista
+      # del HOST. `PORT` ahí elige en qué puerto se publica el contenedor; el
+      # proceso de adentro siempre escucha en 8080, que es el lado interno del
+      # mapeo. Sin esto, poner PORT=8081 en el `.env` movía el listen dentro
+      # del contenedor y el mapeo quedaba apuntando a un puerto muerto.
+      PORT: 8080
     ports:
       - "${PORT:-8080}:8080"
     volumes:

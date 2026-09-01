@@ -55,7 +55,7 @@ class NotificacionController {
 
   /** POST /api/notificaciones/descartar-por-reserva/:reservaId */
   async descartarPorReserva(req, res) {
-    const resultado = await notificacionService.descartarPorReserva(req.params.reservaId);
+    const resultado = await notificacionService.descartarPorReserva(req.params.reservaId, req.user?.sub || null);
     return res.json({ ok: true, data: resultado });
   }
 

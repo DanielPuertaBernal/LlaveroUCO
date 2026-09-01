@@ -178,10 +178,31 @@ class NotificacionService {
     return notificacionRepository.updateById(id, { estado_envio: 'descartado' });
   }
 
-  async descartarPorReserva(reservaId) {
+  /**
+   * Descarta el aviso de una reserva sin reclamar.
+   *
+   * La marca vive en la reserva, no en `notificaciones`: la bandeja se arma
+   * desde `reservas.estado`, y la notificación solo se inserta en el instante
+   * en que la reserva pasa a `no_reclamada`. Exigir esa fila hacía que toda
+   * reserva que hubiera cruzado ese punto sin notificación quedara atascada
+   * con un 404 permanente.
+   *
+   * Si además hay una notificación pendiente, se marca descartada para que el
+   * scheduler no la envíe. Que no exista no es un error.
+   */
+  async descartarPorReserva(reservaId, usuarioId = null) {
+    // Require local, igual que en el resto del archivo: `reserva.service.js`
+    // ya depende de este módulo y a nivel superior el ciclo se cerraría.
+    const reservaRepository = require('../reservas/reserva.repository');
+    const reserva = await reservaRepository.findById(reservaId);
+    if (!reserva) throw Object.assign(new Error('Reserva no encontrada'), { status: 404 });
+
+    await reservaRepository.marcarNotificacionDescartada(reservaId, usuarioId);
+
     const notif = await notificacionRepository.findPendienteByReserva(reservaId);
-    if (!notif) throw Object.assign(new Error('No hay notificación pendiente para esta reserva'), { status: 404 });
-    return notificacionRepository.updateById(notif.id, { estado_envio: 'descartado' });
+    if (notif) await notificacionRepository.updateById(notif.id, { estado_envio: 'descartado' });
+
+    return { ok: true, reserva_id: reservaId, notificacion_descartada: !!notif };
   }
 
   /**
