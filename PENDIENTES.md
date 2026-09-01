@@ -56,13 +56,27 @@ Candidato a una factory `createCrudResource()`.
 
 **Depende del punto 1.**
 
-### 5. Bypass de capas entre repositorios
+### 5. `/api/comunidad` devuelve las 7590 filas de una
+
+El endpoint no pagina: manda el padrón completo, 1,53 MB de JSON, y el cliente
+filtra y ordena en memoria. Hoy funciona, pero el costo crece con cada
+sincronización de la ETL, y `applyPagination` ya existe en el backend.
+
+Lo que se arregló en su momento fue el *render thrash* que congelaba la página
+(el array de columnas se reconstruía en cada render y obligaba a TanStack a
+rearmar las 7590 filas). Eso bajó de ~142 ms a ~0 por render, pero es una
+curita sobre el problema real: **el navegador no debería recibir 7590 filas**.
+
+El arreglo de fondo es paginar y buscar en el servidor. Toca la página y el
+endpoint, así que depende del punto 1.
+
+### 6. Bypass de capas entre repositorios
 
 Varios repositorios consultan tablas de otros features en vez de pasar por el
 repositorio dueño. Detalle en `analisis/backend/llaves.md` §7 y
 `analisis/backend/reservas_semestrales.md` §6.
 
-### 6. Veintisiete advertencias de `exhaustive-deps`
+### 7. Veintisiete advertencias de `exhaustive-deps`
 
 Están topadas en CI con `pnpm lint --max-warnings 27`, así que no pueden crecer.
 Son efectos que necesitan pensarse de a uno, no un `// eslint-disable` masivo.
@@ -71,7 +85,7 @@ Son efectos que necesitan pensarse de a uno, no un `// eslint-disable` masivo.
 
 ## Riesgo bajo
 
-### 7. `validarOperacion` es código muerto que aparenta ser un gate de autorización
+### 8. `validarOperacion` es código muerto que aparenta ser un gate de autorización
 
 `ubicacion.service.js:126`. Verificado: la única otra mención en todo el
 backend es un comentario en `llave.service.js:64` que describe la validación
@@ -80,7 +94,7 @@ anterior. Nadie la llama.
 Un método muerto con nombre de control de acceso es peor que no tenerlo — el
 próximo que lea el archivo va a asumir que algo está protegido.
 
-### 8. Columnas sin flujo que las maneje
+### 9. Columnas sin flujo que las maneje
 
 - `novedades.prestamo_id`: verificado, solo aparece en un comentario de
   `novedad.repository.js:37`. Ningún código la lee ni la escribe.
@@ -88,29 +102,29 @@ próximo que lea el archivo va a asumir que algo está protegido.
   columnas actualizables de `novedad.repository.js:71`, o sea que es escribible
   por la vía genérica de update, pero ningún flujo la maneja de verdad.
 
-### 9. `configuracion_bloques` sin CHECK en base
+### 10. `configuracion_bloques` sin CHECK en base
 
 El tope de `max(1440)` minutos vive solo en Zod. Un seed o un script que escriba
 directo puede dejar valores fuera de rango.
 
-### 10. Solo se puede reportar una novedad sobre una llave con préstamo activo
+### 11. Solo se puede reportar una novedad sobre una llave con préstamo activo
 
 Una llave rota que está en el tablero no tiene dónde engancharse.
 
-### 11. Tests de repositorio
+### 12. Tests de repositorio
 
 Requieren una base de datos desechable o mocking pesado del query builder.
 Excluidos a propósito del ciclo de testing actual por ROI. Van después del
 frontend.
 
-### 12. Sin hooks pre-commit
+### 13. Sin hooks pre-commit
 
 CI ya corre en cada push y PR, así que esto es comodidad, no protección: acorta
 el ciclo de feedback pero no cambia lo que llega a `main`.
 
 ## Entorno
 
-### 13. `LlaveroFront/dist/` es propiedad de root
+### 14. `LlaveroFront/dist/` es propiedad de root
 
 Sobra de un build de Docker que escribió en el bind mount. `pnpm build` local
 falla al intentar limpiarlo:
@@ -126,7 +140,7 @@ módulos). CI no lo sufre porque hace checkout limpio.
 sudo rm -rf LlaveroFront/dist
 ```
 
-### 14. El bundle del front pasa los 2.5 MB
+### 15. El bundle del front pasa los 2.5 MB
 
 `index-*.js` sale en 2,526 kB (631 kB gzip) y Vite avisa en cada build.
 Candidatos a `import()` dinámico: `xlsx` (429 kB) y `jspdf`, que solo se usan en

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import DataTable from '@/shared/components/DataTable';
 import { useComunidad, useCrearPersona, useActualizarPersona, useEliminarPersona } from './comunidadApi';
 import { Users, Pencil, Trash2, UserPlus } from 'lucide-react';
@@ -88,15 +88,16 @@ export default function ComunidadPage() {
   const actualizarPersona = useActualizarPersona();
   const eliminarPersona = useEliminarPersona();
 
-  const facultadesUnicas = [...new Set(
-    personas.map((p) => p.facultad).filter(Boolean)
-  )].sort();
+  const facultadesUnicas = useMemo(
+    () => [...new Set(personas.map((p) => p.facultad).filter(Boolean))].sort(),
+    [personas]
+  );
 
   const [sheet, setSheet] = useState({ open: false, modo: 'editar', data: null });
   const [form, setForm] = useState({});
   const [errors, setErrors] = useState({});
 
-  function abrirEditar(persona) {
+  const abrirEditar = useCallback(function abrirEditar(persona) {
     setErrors({});
     setForm({
       numero_documento: persona.numero_documento || '',
@@ -108,7 +109,7 @@ export default function ComunidadPage() {
       numero_contacto: persona.numero_contacto || '',
     });
     setSheet({ open: true, modo: 'editar', data: persona });
-  }
+  }, []);
 
   function abrirRegistrar() {
     setErrors({});
@@ -162,7 +163,7 @@ export default function ComunidadPage() {
     }
   }
 
-  async function onEliminar(persona) {
+  const onEliminar = useCallback(async function onEliminar(persona) {
     const { isConfirmed } = await showConfirm(
       'Eliminar persona',
       `¿Desea eliminar a ${persona.nombre} (${persona.numero_documento})?`
@@ -174,9 +175,9 @@ export default function ComunidadPage() {
     } catch (e) {
       showError(e.response?.data?.message || 'Error al eliminar');
     }
-  }
+  }, [eliminarPersona]);
 
-  const COLUMNAS_CON_ACCIONES = [
+  const COLUMNAS_CON_ACCIONES = useMemo(() => [
     ...COLUMNAS,
     {
       key: '_acciones',
@@ -201,7 +202,7 @@ export default function ComunidadPage() {
         </div>
       ),
     },
-  ];
+  ], [abrirEditar, onEliminar]);
 
   return (
     <div className="space-y-5">

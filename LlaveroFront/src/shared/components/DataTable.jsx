@@ -11,6 +11,11 @@ import { ArrowUpDown, ArrowUp, ArrowDown, FileSpreadsheet, Search } from 'lucide
 import { cn } from '@/shared/lib/utils';
 import Button from '@/shared/components/ui/Button';
 
+// Un `= []` como valor por defecto crea un array nuevo en cada render y
+// invalida los useMemo que lo tienen como dependencia. Una constante de módulo
+// mantiene la identidad estable.
+const SIN_CLAVES_EXTRA = [];
+
 function normalizeSearchValue(value) {
   return String(value ?? '')
     .toLowerCase()
@@ -32,7 +37,7 @@ export default function DataTable({
   pageSize = 20,
   searchable = true,
   exportable = false,
-  extraSearchKeys = [],
+  extraSearchKeys = SIN_CLAVES_EXTRA,
   exportFileName = 'datos',
   loading = false,
   onRowClick,
