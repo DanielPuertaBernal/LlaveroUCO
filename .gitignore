@@ -40,3 +40,5 @@ yarn-debug.log*
 
 # Volcados de base de datos (contienen datos reales)
 *.sql
+# ...salvo el DDL de esquema versionado como documentacion (sin datos)
+!documentacion/**/*.sql
